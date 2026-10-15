@@ -50,12 +50,6 @@ public class StreamSniffer {
         this.context = context.getApplicationContext();
     }
 
-    private final OkHttpClient snifferClient = new OkHttpClient.Builder()
-            .followRedirects(true)
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .build();
-
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     public void sniff(String embedUrl, Callback callback) {
         destroy();
@@ -95,9 +89,6 @@ public class StreamSniffer {
                             String reqUrl = request.getUrl().toString();
                             if (isTargetStream(reqUrl)) {
                                 handleDetectedUrl(reqUrl, embedUrl, callback);
-                            } else if (isBalancerHtml(reqUrl, request)) {
-                                WebResourceResponse cleanResp = interceptAndInjectAutoPlay(request, reqUrl);
-                                if (cleanResp != null) return cleanResp;
                             }
                         }
                         return super.shouldInterceptRequest(view, request);
@@ -113,10 +104,10 @@ public class StreamSniffer {
                 timeoutRunnable = () -> {
                     if (isResolved.compareAndSet(false, true)) {
                         destroy();
-                        callback.onError("Время ожидания прямого потока истекло");
+                        callback.onError("Direct stream not sniffed");
                     }
                 };
-                handler.postDelayed(timeoutRunnable, 9000);
+                handler.postDelayed(timeoutRunnable, 2200);
 
                 String finalEmbedUrl = embedUrl;
                 if (!finalEmbedUrl.contains("autoplay=")) {
@@ -143,109 +134,6 @@ public class StreamSniffer {
                 callback.onError(e.getMessage());
             }
         });
-    }
-
-    private boolean isBalancerHtml(String url, WebResourceRequest request) {
-        if (url == null || request == null) return false;
-        if (!"GET".equalsIgnoreCase(request.getMethod())) return false;
-
-        String lower = url.toLowerCase();
-        boolean isBalancerHost = lower.contains("stravers.live") || lower.contains("alloha") ||
-                lower.contains("delivembd") || lower.contains("kinohost") ||
-                lower.contains("kinohub") || lower.contains("vidsrc") || lower.contains("/embed");
-        if (!isBalancerHost) return false;
-
-        Map<String, String> headers = request.getRequestHeaders();
-        if (headers == null) return false;
-
-        String accept = headers.get("Accept");
-        if (accept == null) accept = headers.get("accept");
-
-        String dest = headers.get("Sec-Fetch-Dest");
-        if (dest == null) dest = headers.get("sec-fetch-dest");
-
-        boolean isFrameOrDoc = "iframe".equalsIgnoreCase(dest) || "document".equalsIgnoreCase(dest);
-        boolean acceptsHtml = accept != null && accept.contains("text/html");
-
-        return isFrameOrDoc || acceptsHtml;
-    }
-
-    private WebResourceResponse interceptAndInjectAutoPlay(WebResourceRequest request, String url) {
-        try {
-            Request.Builder reqBuilder = new Request.Builder().url(url);
-            if (request.getRequestHeaders() != null) {
-                for (Map.Entry<String, String> entry : request.getRequestHeaders().entrySet()) {
-                    reqBuilder.header(entry.getKey(), entry.getValue());
-                }
-            }
-            if (request.getRequestHeaders() == null || !request.getRequestHeaders().containsKey("Referer")) {
-                reqBuilder.header("Referer", "https://kinogo.inc/");
-            }
-
-            Response resp = snifferClient.newCall(reqBuilder.build()).execute();
-            if (resp.isSuccessful() && resp.body() != null) {
-                String originalHtml = resp.body().string();
-                originalHtml = originalHtml.replaceAll("\\sintegrity=\"[^\"]*\"", "")
-                        .replace("saveTime: 1", "saveTime: 0")
-                        .replace("autoplay: 0", "autoplay: 1");
-                String injection = "<script id=\"boom-sniffer-script\">" +
-                        "(function() {" +
-                        "  function report(url) {" +
-                        "    if (!url || typeof url !== 'string') return;" +
-                        "    if (url.indexOf('.m3u8') !== -1 || url.indexOf('.mp4') !== -1) {" +
-                        "      try { window.parent.postMessage({action: 'streamFound', url: url}, '*'); } catch(e){}" +
-                        "      try { if (window.BoomBridge) window.BoomBridge.onStreamDetected(url); } catch(e){}" +
-                        "    }" +
-                        "  }" +
-                        "  var checkHls = setInterval(function() {" +
-                        "    if (window.Hls && window.Hls.prototype && !window.Hls.prototype.__boom) {" +
-                        "      window.Hls.prototype.__boom = true;" +
-                        "      var origLoad = window.Hls.prototype.loadSource;" +
-                        "      window.Hls.prototype.loadSource = function(src) {" +
-                        "        report(src);" +
-                        "        return origLoad.apply(this, arguments);" +
-                        "      };" +
-                        "    }" +
-                        "  }, 50);" +
-                        "  setInterval(function() {" +
-                        "    document.querySelectorAll('video').forEach(function(v) {" +
-                        "      if (v.src) report(v.src);" +
-                        "      if (v.paused) v.play().catch(function(){});" +
-                        "    });" +
-                        "    document.querySelectorAll('button, div, span, a').forEach(function(el) {" +
-                        "      var t = (el.innerText || el.textContent || '').toLowerCase();" +
-                        "      var c = (el.className || '').toString().toLowerCase();" +
-                        "      if (c.indexOf('play') !== -1 || t.indexOf('смотреть') !== -1 || t.indexOf('пуск') !== -1 || t.indexOf('play') !== -1) {" +
-                        "        try { el.click(); } catch(e){}" +
-                        "      }" +
-                        "    });" +
-                        "  }, 250);" +
-                        "})();" +
-                        "</script>";
-
-                String modifiedHtml;
-                if (originalHtml.contains("</head>")) {
-                    modifiedHtml = originalHtml.replace("</head>", injection + "</head>");
-                } else {
-                    modifiedHtml = injection + originalHtml;
-                }
-
-                Map<String, String> responseHeaders = new HashMap<>();
-                responseHeaders.put("Access-Control-Allow-Origin", "*");
-                responseHeaders.put("Access-Control-Allow-Credentials", "true");
-                responseHeaders.put("Content-Type", "text/html; charset=utf-8");
-
-                return new WebResourceResponse(
-                        "text/html",
-                        "UTF-8",
-                        200,
-                        "OK",
-                        responseHeaders,
-                        new ByteArrayInputStream(modifiedHtml.getBytes(StandardCharsets.UTF_8))
-                );
-            }
-        } catch (Exception ignored) {}
-        return null;
     }
 
     private boolean isTargetStream(String url) {

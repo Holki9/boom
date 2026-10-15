@@ -151,9 +151,10 @@ public class CollapsScraper {
                         try (Response cResp = client.newCall(cReq).execute()) {
                             if (cResp.isSuccessful() && cResp.body() != null) {
                                 String html = cResp.body().string();
-                                StreamSource parsed = parseCollapsHtml(html, media.getTitle());
+                                StreamSource parsed = parseCollapsHtml(html, media.getTitle(), season, episode, media.isTv());
                                 if (parsed != null && parsed.getHlsMasterUrl() != null) {
                                     source.setHlsMasterUrl(parsed.getHlsMasterUrl());
+                                    source.setReferer("https://api.delivembd.ws/");
                                     source.setDirectStream(true);
                                     if (!parsed.getAudioTracks().isEmpty()) {
                                         source.setAudioTracks(parsed.getAudioTracks());
@@ -202,15 +203,27 @@ public class CollapsScraper {
         });
     }
 
-    private StreamSource parseCollapsHtml(String html, String title) {
+    private StreamSource parseCollapsHtml(String html, String title, int season, int episode, boolean isTv) {
         StreamSource src = new StreamSource();
         src.setTitle(title);
+        src.setReferer("https://api.delivembd.ws/");
 
-        Pattern hlsPattern = Pattern.compile("hls:\\s*[\"']([^\"']+\\.m3u8[^\"']*)[\"']");
-        Matcher m = hlsPattern.matcher(html);
-        if (m.find()) {
-            src.setHlsMasterUrl(m.group(1));
-            src.setDirectStream(true);
+        if (isTv) {
+            Pattern epPattern = Pattern.compile("\"episode\"\\s*:\\s*\"?" + episode + "\"?[^}]*?\"hls\"\\s*:\\s*\"([^\"]+\\.m3u8[^\"]*)\"");
+            Matcher epMatcher = epPattern.matcher(html);
+            if (epMatcher.find()) {
+                src.setHlsMasterUrl(epMatcher.group(1));
+                src.setDirectStream(true);
+            }
+        }
+
+        if (src.getHlsMasterUrl() == null) {
+            Pattern hlsPattern = Pattern.compile("[\"']?hls[\"']?\\s*:\\s*[\"']([^\"']+\\.m3u8[^\"']*)[\"']");
+            Matcher m = hlsPattern.matcher(html);
+            if (m.find()) {
+                src.setHlsMasterUrl(m.group(1));
+                src.setDirectStream(true);
+            }
         }
 
         Pattern audioPattern = Pattern.compile("audio:\\s*\\{[^}]*\"names\":\\s*\\[([^\\]]+)\\]");
