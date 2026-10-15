@@ -146,16 +146,28 @@ public class StreamSniffer {
     }
 
     private boolean isBalancerHtml(String url, WebResourceRequest request) {
-        if (url == null) return false;
+        if (url == null || request == null) return false;
+        if (!"GET".equalsIgnoreCase(request.getMethod())) return false;
+
         String lower = url.toLowerCase();
         boolean isBalancerHost = lower.contains("stravers.live") || lower.contains("alloha") ||
                 lower.contains("delivembd") || lower.contains("kinohost") ||
                 lower.contains("kinohub") || lower.contains("vidsrc") || lower.contains("/embed");
         if (!isBalancerHost) return false;
 
-        String accept = request.getRequestHeaders() != null ? request.getRequestHeaders().get("Accept") : null;
+        Map<String, String> headers = request.getRequestHeaders();
+        if (headers == null) return false;
+
+        String accept = headers.get("Accept");
+        if (accept == null) accept = headers.get("accept");
+
+        String dest = headers.get("Sec-Fetch-Dest");
+        if (dest == null) dest = headers.get("sec-fetch-dest");
+
+        boolean isFrameOrDoc = "iframe".equalsIgnoreCase(dest) || "document".equalsIgnoreCase(dest);
         boolean acceptsHtml = accept != null && accept.contains("text/html");
-        return acceptsHtml || (!lower.contains(".js") && !lower.contains(".css") && !lower.contains(".m3u8") && !lower.contains(".ts") && !lower.contains(".png") && !lower.contains(".jpg") && !lower.contains(".svg"));
+
+        return isFrameOrDoc || acceptsHtml;
     }
 
     private WebResourceResponse interceptAndInjectAutoPlay(WebResourceRequest request, String url) {
@@ -173,6 +185,9 @@ public class StreamSniffer {
             Response resp = snifferClient.newCall(reqBuilder.build()).execute();
             if (resp.isSuccessful() && resp.body() != null) {
                 String originalHtml = resp.body().string();
+                originalHtml = originalHtml.replaceAll("\\sintegrity=\"[^\"]*\"", "")
+                        .replace("saveTime: 1", "saveTime: 0")
+                        .replace("autoplay: 0", "autoplay: 1");
                 String injection = "<script id=\"boom-sniffer-script\">" +
                         "(function() {" +
                         "  function report(url) {" +

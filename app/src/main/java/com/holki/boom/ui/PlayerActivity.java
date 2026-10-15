@@ -441,9 +441,6 @@ public class PlayerActivity extends AppCompatActivity {
                 if (isBalancerHtml(url, request)) {
                     WebResourceResponse resp = interceptAndCleanHtml(request, url);
                     if (resp != null) return resp;
-                } else if (isBalancerCss(url)) {
-                    WebResourceResponse resp = interceptAndAppendCss(request, url);
-                    if (resp != null) return resp;
                 }
 
                 return super.shouldInterceptRequest(view, request);
@@ -495,22 +492,28 @@ public class PlayerActivity extends AppCompatActivity {
     }
 
     private boolean isBalancerHtml(String url, WebResourceRequest request) {
-        if (url == null) return false;
+        if (url == null || request == null) return false;
+        if (!"GET".equalsIgnoreCase(request.getMethod())) return false;
+
         String lower = url.toLowerCase();
         boolean isBalancerHost = lower.contains("stravers.live") || lower.contains("alloha") ||
                 lower.contains("delivembd") || lower.contains("kinohost") ||
                 lower.contains("kinohub") || lower.contains("vidsrc") || lower.contains("/embed");
         if (!isBalancerHost) return false;
 
-        String accept = request.getRequestHeaders() != null ? request.getRequestHeaders().get("Accept") : null;
-        boolean acceptsHtml = accept != null && accept.contains("text/html");
-        return acceptsHtml || (!lower.contains(".js") && !lower.contains(".css") && !lower.contains(".m3u8") && !lower.contains(".ts") && !lower.contains(".png") && !lower.contains(".jpg") && !lower.contains(".svg"));
-    }
+        Map<String, String> headers = request.getRequestHeaders();
+        if (headers == null) return false;
 
-    private boolean isBalancerCss(String url) {
-        if (url == null) return false;
-        String lower = url.toLowerCase();
-        return (lower.contains("stravers.live") || lower.contains("alloha") || lower.contains("delivembd")) && lower.contains(".css");
+        String accept = headers.get("Accept");
+        if (accept == null) accept = headers.get("accept");
+
+        String dest = headers.get("Sec-Fetch-Dest");
+        if (dest == null) dest = headers.get("sec-fetch-dest");
+
+        boolean isFrameOrDoc = "iframe".equalsIgnoreCase(dest) || "document".equalsIgnoreCase(dest);
+        boolean acceptsHtml = accept != null && accept.contains("text/html");
+
+        return isFrameOrDoc || acceptsHtml;
     }
 
     private static String getCleanerCssRules() {
@@ -535,6 +538,7 @@ public class PlayerActivity extends AppCompatActivity {
                 "    if (!v || v.__boomInit) return;" +
                 "    v.__boomInit = true;" +
                 "    v.style.objectFit = 'cover';" +
+                "    try { v.muted = false; } catch(e){}" +
                 "    v.addEventListener('timeupdate', function() {" +
                 "      var msg = { action: 'webTimeUpdate', current: v.currentTime, duration: v.duration || 0 };" +
                 "      try { window.parent.postMessage(msg, '*'); } catch(e){}" +
@@ -557,9 +561,9 @@ public class PlayerActivity extends AppCompatActivity {
                 "    var cmd = ev.data;" +
                 "    var v = findVid();" +
                 "    if (!v) return;" +
-                "    if (cmd.action === 'play') { v.play().catch(function(){}); }" +
-                "    else if (cmd.action === 'pause') { v.pause(); }" +
-                "    else if (cmd.action === 'togglePlay') { if (v.paused) v.play().catch(function(){}); else v.pause(); }" +
+                "    if (cmd.action === 'play') { v.__manualPaused = false; v.play().catch(function(){}); }" +
+                "    else if (cmd.action === 'pause') { v.__manualPaused = true; v.pause(); }" +
+                "    else if (cmd.action === 'togglePlay') { if (v.paused) { v.__manualPaused = false; v.play().catch(function(){}); } else { v.__manualPaused = true; v.pause(); } }" +
                 "    else if (cmd.action === 'seekPercent') { if (v.duration) v.currentTime = v.duration * cmd.percent; }" +
                 "    else if (cmd.action === 'seekDelta') { v.currentTime += cmd.delta; }" +
                 "    else if (cmd.action === 'seekTime') { v.currentTime = cmd.time; }" +
@@ -568,7 +572,10 @@ public class PlayerActivity extends AppCompatActivity {
                 "  });" +
                 "  setInterval(function() {" +
                 "    var v = findVid();" +
-                "    if (v) bindVid(v);" +
+                "    if (v) {" +
+                "      bindVid(v);" +
+                "      if (v.paused && !v.__manualPaused) { v.play().catch(function(){}); }" +
+                "    }" +
                 "    var tsBtn = document.querySelector('.time_save__btn, .time_save button, [class*=\"time_save\"] button, .modal button');" +
                 "    if (tsBtn) { try { tsBtn.click(); } catch(e){} }" +
                 "    document.querySelectorAll('button, div, span, a').forEach(function(el) {" +
@@ -595,7 +602,8 @@ public class PlayerActivity extends AppCompatActivity {
             Response resp = webClient.newCall(reqBuilder.build()).execute();
             if (resp.isSuccessful() && resp.body() != null) {
                 String originalHtml = resp.body().string();
-                originalHtml = originalHtml.replace("saveTime: 1", "saveTime: 0")
+                originalHtml = originalHtml.replaceAll("\\sintegrity=\"[^\"]*\"", "")
+                        .replace("saveTime: 1", "saveTime: 0")
                         .replace("autoplay: 0", "autoplay: 1");
                 String injection = getBalancerInjectionHead();
                 String modifiedHtml;
@@ -621,39 +629,6 @@ public class PlayerActivity extends AppCompatActivity {
             }
         } catch (Exception e) {
             android.util.Log.e("BOOM_PLAYER", "HTML interception error: " + e.getMessage());
-        }
-        return null;
-    }
-
-    private WebResourceResponse interceptAndAppendCss(WebResourceRequest request, String url) {
-        try {
-            Request.Builder reqBuilder = new Request.Builder().url(url);
-            if (request.getRequestHeaders() != null) {
-                for (Map.Entry<String, String> entry : request.getRequestHeaders().entrySet()) {
-                    reqBuilder.header(entry.getKey(), entry.getValue());
-                }
-            }
-            Response resp = webClient.newCall(reqBuilder.build()).execute();
-            if (resp.isSuccessful() && resp.body() != null) {
-                String originalCss = resp.body().string();
-                String extraCss = "\n" + getCleanerCssRules() + "\n";
-                String modifiedCss = originalCss + extraCss;
-
-                Map<String, String> responseHeaders = new HashMap<>();
-                responseHeaders.put("Access-Control-Allow-Origin", "*");
-                responseHeaders.put("Content-Type", "text/css; charset=utf-8");
-
-                return new WebResourceResponse(
-                        "text/css",
-                        "UTF-8",
-                        200,
-                        "OK",
-                        responseHeaders,
-                        new ByteArrayInputStream(modifiedCss.getBytes(StandardCharsets.UTF_8))
-                );
-            }
-        } catch (Exception e) {
-            android.util.Log.e("BOOM_PLAYER", "CSS interception error: " + e.getMessage());
         }
         return null;
     }
