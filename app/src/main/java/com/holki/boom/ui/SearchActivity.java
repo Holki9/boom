@@ -89,8 +89,8 @@ public class SearchActivity extends AppCompatActivity {
             chip.setText(suggestion);
             chip.setTextColor(getColor(R.color.text_primary));
             chip.setChipBackgroundColorResource(R.color.card_dark);
-            chip.setStrokeColorResource(R.color.card_stroke);
-            chip.setStrokeWidth(2f);
+            chip.setChipStrokeColorResource(R.color.card_stroke);
+            chip.setChipStrokeWidth(2f);
             chip.setOnClickListener(v -> {
                 v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                 etSearch.setText(suggestion);
