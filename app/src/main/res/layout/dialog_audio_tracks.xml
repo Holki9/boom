@@ -14,6 +14,7 @@
         android:background="@drawable/bg_chip_unselected" />
 
     <TextView
+        android:id="@+id/tvTracksHeading"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Озвучка / Аудиодорожка"
