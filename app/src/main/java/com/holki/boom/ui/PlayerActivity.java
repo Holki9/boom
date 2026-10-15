@@ -11,10 +11,12 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
-import android.webkit.WebSettings;
+import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -23,6 +25,7 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.OptIn;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.media3.common.MediaItem;
@@ -50,10 +53,12 @@ public class PlayerActivity extends AppCompatActivity {
     private ExoPlayer player;
     private PlayerView playerView;
     private WebView webViewPlayer;
+    private FrameLayout flFullscreenContainer;
+    private LinearLayout llWebFloatingBar;
     private RelativeLayout rlControls;
     private View gestureOverlay;
 
-    private TextView tvTitle, tvCurrentTime, tvTotalTime;
+    private TextView tvTitle, tvCurrentTime, tvTotalTime, btnExoSource, btnFloatingSource;
     private ImageView btnBack, btnFloatingBack, btnPlayPause, btnReplay10, btnForward10, btnAudioTrack, btnAspectRatio, btnFullscreen;
     private SeekBar seekBar;
     private ProgressBar pbBuffering;
@@ -71,6 +76,9 @@ public class PlayerActivity extends AppCompatActivity {
     private WatchHistoryStore historyStore;
     private AudioManager audioManager;
     private final Handler handler = new Handler(Looper.getMainLooper());
+
+    private WebChromeClient.CustomViewCallback customViewCallback;
+    private View customView;
 
     private boolean isControlsVisible = true;
     private final Runnable hideControlsRunnable = this::hideControls;
@@ -111,6 +119,7 @@ public class PlayerActivity extends AppCompatActivity {
         initViews();
         setupControls();
         setupGestures();
+        setupBackHandling();
 
         if (streamSource != null && streamSource.getHlsMasterUrl() != null && !streamSource.getHlsMasterUrl().isEmpty()) {
             initExoPlayer(streamSource.getHlsMasterUrl());
@@ -125,6 +134,8 @@ public class PlayerActivity extends AppCompatActivity {
     private void initViews() {
         playerView = findViewById(R.id.playerView);
         webViewPlayer = findViewById(R.id.webViewPlayer);
+        flFullscreenContainer = findViewById(R.id.flFullscreenContainer);
+        llWebFloatingBar = findViewById(R.id.llWebFloatingBar);
         rlControls = findViewById(R.id.rlPlayerControls);
         gestureOverlay = findViewById(R.id.viewGestureOverlay);
 
@@ -136,6 +147,9 @@ public class PlayerActivity extends AppCompatActivity {
 
         btnBack = findViewById(R.id.btnPlayerBack);
         btnFloatingBack = findViewById(R.id.btnFloatingBack);
+        btnFloatingSource = findViewById(R.id.btnFloatingSource);
+        btnExoSource = findViewById(R.id.btnExoSource);
+
         btnPlayPause = findViewById(R.id.btnPlayPause);
         btnReplay10 = findViewById(R.id.btnReplay10);
         btnForward10 = findViewById(R.id.btnForward10);
@@ -160,7 +174,9 @@ public class PlayerActivity extends AppCompatActivity {
     private void initExoPlayer(String streamUrl) {
         playerView.setVisibility(View.VISIBLE);
         webViewPlayer.setVisibility(View.GONE);
-        btnFloatingBack.setVisibility(View.GONE);
+        llWebFloatingBar.setVisibility(View.GONE);
+        rlControls.setVisibility(View.VISIBLE);
+        gestureOverlay.setVisibility(View.VISIBLE);
 
         player = new ExoPlayer.Builder(this).build();
         playerView.setPlayer(player);
@@ -203,7 +219,8 @@ public class PlayerActivity extends AppCompatActivity {
                 if (streamSource != null && streamSource.getWebEmbedUrl() != null) {
                     initWebView(streamSource.getWebEmbedUrl());
                 } else {
-                    Toast.makeText(PlayerActivity.this, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(PlayerActivity.this, "Ошибка прямого потока, выберите источник", Toast.LENGTH_SHORT).show();
+                    showSourceSelectorDialog();
                 }
             }
         });
@@ -218,7 +235,8 @@ public class PlayerActivity extends AppCompatActivity {
         }
         playerView.setVisibility(View.GONE);
         rlControls.setVisibility(View.GONE);
-        btnFloatingBack.setVisibility(View.VISIBLE);
+        gestureOverlay.setVisibility(View.GONE);
+        llWebFloatingBar.setVisibility(View.VISIBLE);
         webViewPlayer.setVisibility(View.VISIBLE);
 
         WebSettings ws = webViewPlayer.getSettings();
@@ -227,29 +245,79 @@ public class PlayerActivity extends AppCompatActivity {
         ws.setDatabaseEnabled(true);
         ws.setMediaPlaybackRequiresUserGesture(false);
         ws.setAllowFileAccess(true);
+        ws.setAllowContentAccess(true);
         ws.setUseWideViewPort(true);
         ws.setLoadWithOverviewMode(true);
         ws.setJavaScriptCanOpenWindowsAutomatically(false);
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         ws.setUserAgentString("Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
 
-        webViewPlayer.setWebChromeClient(new WebChromeClient());
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        cookieManager.setAcceptThirdPartyCookies(webViewPlayer, true);
+
+        webViewPlayer.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (customView != null) {
+                    callback.onCustomViewHidden();
+                    return;
+                }
+                customView = view;
+                customViewCallback = callback;
+                flFullscreenContainer.addView(customView);
+                flFullscreenContainer.setVisibility(View.VISIBLE);
+                webViewPlayer.setVisibility(View.GONE);
+                llWebFloatingBar.setVisibility(View.GONE);
+            }
+
+            @Override
+            public void onHideCustomView() {
+                if (customView == null) return;
+                flFullscreenContainer.removeView(customView);
+                flFullscreenContainer.setVisibility(View.GONE);
+                webViewPlayer.setVisibility(View.VISIBLE);
+                llWebFloatingBar.setVisibility(View.VISIBLE);
+                if (customViewCallback != null) {
+                    customViewCallback.onCustomViewHidden();
+                }
+                customView = null;
+                customViewCallback = null;
+            }
+        });
+
         webViewPlayer.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                if (url.startsWith("intent:") || url.startsWith("market:") || url.startsWith("tg:") || url.startsWith("viber:")) {
+                if (url.startsWith("intent:") || url.startsWith("market:") || url.startsWith("tg:") || url.startsWith("viber:") || url.startsWith("whatsapp:")) {
                     return true;
                 }
                 return false;
             }
         });
 
-        webViewPlayer.loadUrl(embedUrl);
+        // Wrap embed inside full-screen HTML iframe with proper referrer
+        String html = "<!DOCTYPE html><html><head>" +
+                "<meta charset=\"utf-8\">" +
+                "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">" +
+                "<style>" +
+                "* { margin: 0; padding: 0; box-sizing: border-box; }" +
+                "html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }" +
+                "iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }" +
+                "</style>" +
+                "</head><body>" +
+                "<iframe src=\"" + embedUrl + "\" allowfullscreen=\"true\" allow=\"autoplay *; fullscreen *; encrypted-media *; picture-in-picture *\"></iframe>" +
+                "</body></html>";
+
+        webViewPlayer.loadDataWithBaseURL("https://kinogo.inc/", html, "text/html", "UTF-8", null);
     }
 
     private void setupControls() {
         btnBack.setOnClickListener(v -> finish());
         btnFloatingBack.setOnClickListener(v -> finish());
+
+        btnFloatingSource.setOnClickListener(v -> showSourceSelectorDialog());
+        btnExoSource.setOnClickListener(v -> showSourceSelectorDialog());
 
         btnPlayPause.setOnClickListener(v -> {
             if (player == null) return;
@@ -322,6 +390,43 @@ public class PlayerActivity extends AppCompatActivity {
         });
     }
 
+    private void showSourceSelectorDialog() {
+        if (streamSource == null) return;
+        BottomSheetDialog dialog = new BottomSheetDialog(this, com.google.android.material.R.style.Theme_Design_BottomSheetDialog);
+        View view = getLayoutInflater().inflate(R.layout.dialog_audio_tracks, null);
+        dialog.setContentView(view);
+
+        TextView tvHeading = view.findViewById(R.id.tvTracksHeading);
+        if (tvHeading != null) {
+            tvHeading.setText("Выберите источник / плеер");
+        }
+
+        LinearLayout container = view.findViewById(R.id.llTracksContainer);
+
+        if (streamSource.getAlternativeEmbeds().isEmpty()) {
+            TextView emptyView = new TextView(this);
+            emptyView.setText("Доступен только один основной источник");
+            emptyView.setTextColor(getColor(R.color.text_muted));
+            container.addView(emptyView);
+        } else {
+            for (StreamSource.EmbedOption option : streamSource.getAlternativeEmbeds()) {
+                TextView optView = new TextView(this);
+                optView.setText("⚡  " + option.getName());
+                optView.setTextSize(15f);
+                optView.setTextColor(getColor(R.color.text_primary));
+                optView.setPadding(0, 24, 0, 24);
+                optView.setOnClickListener(v -> {
+                    dialog.dismiss();
+                    Toast.makeText(this, "Загрузка: " + option.getName(), Toast.LENGTH_SHORT).show();
+                    initWebView(option.getUrl());
+                });
+                container.addView(optView);
+            }
+        }
+
+        dialog.show();
+    }
+
     private void setupGestures() {
         GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override
@@ -368,6 +473,21 @@ public class PlayerActivity extends AppCompatActivity {
                 llVolumeHud.setVisibility(View.GONE);
             }
             return true;
+        });
+    }
+
+    private void setupBackHandling() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (customView != null) {
+                    if (webViewPlayer != null && webViewPlayer.getWebChromeClient() != null) {
+                        webViewPlayer.getWebChromeClient().onHideCustomView();
+                    }
+                    return;
+                }
+                finish();
+            }
         });
     }
 

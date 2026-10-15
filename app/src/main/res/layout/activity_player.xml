@@ -22,17 +22,46 @@
         android:layout_height="match_parent"
         android:visibility="gone" />
 
-    <!-- Persistent Floating Back Button (always accessible) -->
-    <ImageView
-        android:id="@+id/btnFloatingBack"
-        android:layout_width="42dp"
-        android:layout_height="42dp"
+    <!-- Fullscreen Container for WebView HTML5 Video Custom View -->
+    <FrameLayout
+        android:id="@+id/flFullscreenContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/black"
+        android:visibility="gone" />
+
+    <!-- Floating Top Bar for WebView Mode (Back + Source Switcher) -->
+    <LinearLayout
+        android:id="@+id/llWebFloatingBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_gravity="top|start"
         android:layout_margin="14dp"
         android:elevation="20dp"
-        android:background="@drawable/bg_hud_pill"
-        android:padding="9dp"
-        android:src="@drawable/ic_back" />
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/btnFloatingBack"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:background="@drawable/bg_hud_pill"
+            android:padding="9dp"
+            android:src="@drawable/ic_back" />
+
+        <TextView
+            android:id="@+id/btnFloatingSource"
+            android:layout_width="wrap_content"
+            android:layout_height="42dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_hud_pill"
+            android:gravity="center"
+            android:paddingHorizontal="14dp"
+            android:text="⚡ Источник"
+            android:textColor="@color/white"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <!-- Touch Gesture Overlay (Handles Swipe Brightness/Volume & Double Tap Seek) -->
     <View
@@ -40,7 +69,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Custom Player Controls Overlay -->
+    <!-- Custom Player Controls Overlay (ExoPlayer Mode) -->
     <RelativeLayout
         android:id="@+id/rlPlayerControls"
         android:layout_width="match_parent"
@@ -78,6 +107,19 @@
                 android:text="Название фильма"
                 android:textColor="@color/white"
                 android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnExoSource"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/bg_hud_pill"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:text="⚡ Источник"
+                android:textColor="@color/white"
+                android:textSize="12sp"
                 android:textStyle="bold" />
 
             <ImageView

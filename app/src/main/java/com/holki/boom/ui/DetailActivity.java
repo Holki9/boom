@@ -130,7 +130,8 @@ public class DetailActivity extends AppCompatActivity {
             rvEpisodes.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
             EpisodeAdapter episodeAdapter = new EpisodeAdapter(this, 16, ep -> {
                 currentEpisode = ep;
-                Toast.makeText(this, "Выбрана серия " + ep, Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Запуск серии " + ep + "...", Toast.LENGTH_SHORT).show();
+                playOnlineStream();
             });
             rvEpisodes.setAdapter(episodeAdapter);
         } else {

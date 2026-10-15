@@ -11,6 +11,20 @@ public class StreamSource implements Serializable {
     private List<SubtitleTrack> subtitles = new ArrayList<>();
     private String webEmbedUrl;
     private boolean isDirectStream;
+    private List<EmbedOption> alternativeEmbeds = new ArrayList<>();
+
+    public static class EmbedOption implements Serializable {
+        private String name;
+        private String url;
+
+        public EmbedOption(String name, String url) {
+            this.name = name;
+            this.url = url;
+        }
+
+        public String getName() { return name; }
+        public String getUrl() { return url; }
+    }
 
     public static class AudioTrack implements Serializable {
         private String name;
@@ -60,4 +74,13 @@ public class StreamSource implements Serializable {
 
     public boolean isDirectStream() { return isDirectStream; }
     public void setDirectStream(boolean directStream) { isDirectStream = directStream; }
+
+    public List<EmbedOption> getAlternativeEmbeds() { return alternativeEmbeds; }
+    public void setAlternativeEmbeds(List<EmbedOption> alternativeEmbeds) { this.alternativeEmbeds = alternativeEmbeds; }
+
+    public void addAlternativeEmbed(String name, String url) {
+        if (url != null && !url.isEmpty()) {
+            this.alternativeEmbeds.add(new EmbedOption(name, url));
+        }
+    }
 }

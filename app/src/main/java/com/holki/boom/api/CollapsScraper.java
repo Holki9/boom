@@ -3,6 +3,7 @@ package com.holki.boom.api;
 import android.os.Handler;
 import android.os.Looper;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.holki.boom.model.MediaItem;
@@ -11,6 +12,7 @@ import com.holki.boom.model.StreamSource;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
@@ -37,12 +39,18 @@ public class CollapsScraper {
     public void resolveStream(MediaItem media, int season, int episode, Callback callback) {
         executor.execute(() -> {
             try {
-                StreamSource source = null;
+                StreamSource source = new StreamSource();
+                source.setTitle(media.getTitle());
 
-                // Step 1: Try Alloha API (has extensive Russian catalog with KP IDs and direct embeds)
+                String kpId = media.getKinopoiskId();
+
+                // Step 1: Query Alloha by name (or KP if known)
                 try {
-                    String query = URLEncoder.encode(media.getTitle(), "UTF-8");
-                    String allohaUrl = "https://api.alloha.tv/?token=" + ALLOHA_TOKEN + "&name=" + query;
+                    String queryParam = (kpId != null && !kpId.isEmpty())
+                            ? "kp=" + kpId
+                            : "name=" + URLEncoder.encode(media.getTitle(), "UTF-8");
+                    String allohaUrl = "https://api.alloha.tv/?token=" + ALLOHA_TOKEN + "&" + queryParam;
+
                     Request req = new Request.Builder()
                             .url(allohaUrl)
                             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
@@ -54,24 +62,82 @@ public class CollapsScraper {
                             JsonObject root = JsonParser.parseString(json).getAsJsonObject();
                             if (root.has("data") && root.get("data").isJsonObject()) {
                                 JsonObject data = root.getAsJsonObject("data");
+
                                 if (data.has("id_kp") && !data.get("id_kp").isJsonNull()) {
-                                    media.setKinopoiskId(data.get("id_kp").getAsString());
+                                    kpId = data.get("id_kp").getAsString();
+                                    media.setKinopoiskId(kpId);
                                 }
-                                if (data.has("iframe") && !data.get("iframe").isJsonNull()) {
-                                    String iframe = data.get("iframe").getAsString();
-                                    source = new StreamSource();
-                                    source.setTitle(media.getTitle());
-                                    source.setWebEmbedUrl(iframe);
+
+                                if (media.isTv()) {
+                                    // Parse TV series season & episode from Alloha
+                                    boolean foundEpisode = false;
+                                    if (data.has("seasons") && data.get("seasons").isJsonObject()) {
+                                        JsonObject seasons = data.getAsJsonObject("seasons");
+                                        String seasonKey = String.valueOf(season);
+                                        if (seasons.has(seasonKey) && seasons.get(seasonKey).isJsonObject()) {
+                                            JsonObject seasonObj = seasons.getAsJsonObject(seasonKey);
+                                            if (seasonObj.has("episodes") && seasonObj.get("episodes").isJsonObject()) {
+                                                JsonObject episodes = seasonObj.getAsJsonObject("episodes");
+                                                String epKey = String.valueOf(episode);
+                                                if (episodes.has(epKey) && episodes.get(epKey).isJsonObject()) {
+                                                    JsonObject epObj = episodes.getAsJsonObject(epKey);
+                                                    if (epObj.has("iframe") && !epObj.get("iframe").isJsonNull()) {
+                                                        source.setWebEmbedUrl(epObj.get("iframe").getAsString());
+                                                        foundEpisode = true;
+                                                    }
+
+                                                    // Collect translation options for this episode
+                                                    if (epObj.has("translation") && epObj.get("translation").isJsonObject()) {
+                                                        JsonObject trObj = epObj.getAsJsonObject("translation");
+                                                        for (Map.Entry<String, JsonElement> entry : trObj.entrySet()) {
+                                                            if (entry.getValue().isJsonObject()) {
+                                                                JsonObject trItem = entry.getValue().getAsJsonObject();
+                                                                String trName = trItem.has("translation") ? trItem.get("translation").getAsString() : "Озвучка";
+                                                                if (trItem.has("iframe") && !trItem.get("iframe").isJsonNull()) {
+                                                                    source.addAlternativeEmbed("Alloha (" + trName + ")", trItem.get("iframe").getAsString());
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (!foundEpisode && data.has("iframe") && !data.get("iframe").isJsonNull()) {
+                                        String baseIframe = data.get("iframe").getAsString();
+                                        baseIframe += "&season=" + season + "&episode=" + episode;
+                                        source.setWebEmbedUrl(baseIframe);
+                                    }
+                                } else {
+                                    // Movie
+                                    if (data.has("iframe") && !data.get("iframe").isJsonNull()) {
+                                        source.setWebEmbedUrl(data.get("iframe").getAsString());
+                                    }
+
+                                    // Collect translation options
+                                    if (data.has("translation_iframe") && data.get("translation_iframe").isJsonObject()) {
+                                        JsonObject trMap = data.getAsJsonObject("translation_iframe");
+                                        for (Map.Entry<String, JsonElement> entry : trMap.entrySet()) {
+                                            if (entry.getValue().isJsonObject()) {
+                                                JsonObject trItem = entry.getValue().getAsJsonObject();
+                                                String trName = trItem.has("name") ? trItem.get("name").getAsString() : "Озвучка";
+                                                if (trItem.has("iframe") && !trItem.get("iframe").isJsonNull()) {
+                                                    source.addAlternativeEmbed(trName, trItem.get("iframe").getAsString());
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 } catch (Exception ignored) {}
 
-                // Step 2: Try Collaps using Kinopoisk ID if available
-                if (media.getKinopoiskId() != null && !media.getKinopoiskId().isEmpty()) {
+                // Step 2: Try Collaps direct HLS stream (if KP ID is available)
+                if (kpId != null && !kpId.isEmpty()) {
                     String type = media.isTv() ? "series" : "movie";
-                    String collapsUrl = "https://api.delivembd.ws/embed/" + type + "/" + media.getKinopoiskId();
+                    String collapsUrl = "https://api.delivembd.ws/embed/" + type + "/" + kpId;
                     if (media.isTv()) {
                         collapsUrl += "?season=" + season + "&episode=" + episode;
                     }
@@ -87,29 +153,45 @@ public class CollapsScraper {
                                 String html = cResp.body().string();
                                 StreamSource parsed = parseCollapsHtml(html, media.getTitle());
                                 if (parsed != null && parsed.getHlsMasterUrl() != null) {
-                                    source = parsed;
-                                    source.setWebEmbedUrl(collapsUrl);
+                                    source.setHlsMasterUrl(parsed.getHlsMasterUrl());
+                                    source.setDirectStream(true);
+                                    if (!parsed.getAudioTracks().isEmpty()) {
+                                        source.setAudioTracks(parsed.getAudioTracks());
+                                    }
                                 }
                             }
                         }
                     } catch (Exception ignored) {}
                 }
 
-                // Step 3: Best Universal Fallback: Kinohub player by KP ID, IMDb ID, or title
-                if (source == null || source.getWebEmbedUrl() == null || source.getWebEmbedUrl().isEmpty()) {
-                    if (source == null) {
-                        source = new StreamSource();
-                        source.setTitle(media.getTitle());
+                // Step 3: Add Universal Balancer Alternatives
+                String identifier = (kpId != null && !kpId.isEmpty()) ? kpId : String.valueOf(media.getId());
+                source.addAlternativeEmbed("Kinobox / Kinohost (Мультиплеер)", "https://kinohost.web.app/movie/" + identifier);
+                source.addAlternativeEmbed("Kinohub VIP", "https://on.kinohub.vip/movie/" + identifier + "/");
+
+                if (kpId != null && !kpId.isEmpty()) {
+                    String collapsEmbed = "https://api.delivembd.ws/embed/" + (media.isTv() ? "series/" : "movie/") + kpId;
+                    if (media.isTv()) {
+                        collapsEmbed += "?season=" + season + "&episode=" + episode;
                     }
-                    String identifier = null;
-                    if (media.getKinopoiskId() != null && !media.getKinopoiskId().isEmpty()) {
-                        identifier = media.getKinopoiskId();
-                    } else if (media.getImdbId() != null && !media.getImdbId().isEmpty()) {
-                        identifier = media.getImdbId();
+                    source.addAlternativeEmbed("Collaps Server", collapsEmbed);
+                }
+
+                // International VidSrc fallback for movies/series
+                String imdbOrTmdb = (media.getImdbId() != null && !media.getImdbId().isEmpty()) ? media.getImdbId() : String.valueOf(media.getId());
+                if (media.isTv()) {
+                    source.addAlternativeEmbed("VidSrc World (EN)", "https://vidsrc.to/embed/tv/" + imdbOrTmdb + "/" + season + "/" + episode);
+                } else {
+                    source.addAlternativeEmbed("VidSrc World (EN)", "https://vidsrc.to/embed/movie/" + imdbOrTmdb);
+                }
+
+                // Ensure primary webEmbedUrl is set
+                if (source.getWebEmbedUrl() == null || source.getWebEmbedUrl().isEmpty()) {
+                    if (!source.getAlternativeEmbeds().isEmpty()) {
+                        source.setWebEmbedUrl(source.getAlternativeEmbeds().get(0).getUrl());
                     } else {
-                        identifier = String.valueOf(media.getId());
+                        source.setWebEmbedUrl("https://kinohost.web.app/movie/" + identifier);
                     }
-                    source.setWebEmbedUrl("https://on.kinohub.vip/movie/" + identifier + "/");
                 }
 
                 final StreamSource finalSource = source;
@@ -124,7 +206,6 @@ public class CollapsScraper {
         StreamSource src = new StreamSource();
         src.setTitle(title);
 
-        // Find hls: "https://...master.m3u8..."
         Pattern hlsPattern = Pattern.compile("hls:\\s*[\"']([^\"']+\\.m3u8[^\"']*)[\"']");
         Matcher m = hlsPattern.matcher(html);
         if (m.find()) {
@@ -132,7 +213,6 @@ public class CollapsScraper {
             src.setDirectStream(true);
         }
 
-        // Find audio track names: audio: {"names":["Рус. Дублированный", ...]}
         Pattern audioPattern = Pattern.compile("audio:\\s*\\{[^}]*\"names\":\\s*\\[([^\\]]+)\\]");
         Matcher am = audioPattern.matcher(html);
         if (am.find()) {
