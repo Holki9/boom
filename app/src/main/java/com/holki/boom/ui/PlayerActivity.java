@@ -12,6 +12,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebSettings;
+import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ImageView;
@@ -53,7 +54,7 @@ public class PlayerActivity extends AppCompatActivity {
     private View gestureOverlay;
 
     private TextView tvTitle, tvCurrentTime, tvTotalTime;
-    private ImageView btnBack, btnPlayPause, btnReplay10, btnForward10, btnAudioTrack, btnAspectRatio, btnFullscreen;
+    private ImageView btnBack, btnFloatingBack, btnPlayPause, btnReplay10, btnForward10, btnAudioTrack, btnAspectRatio, btnFullscreen;
     private SeekBar seekBar;
     private ProgressBar pbBuffering;
 
@@ -134,6 +135,7 @@ public class PlayerActivity extends AppCompatActivity {
         pbBuffering = findViewById(R.id.pbPlayerBuffering);
 
         btnBack = findViewById(R.id.btnPlayerBack);
+        btnFloatingBack = findViewById(R.id.btnFloatingBack);
         btnPlayPause = findViewById(R.id.btnPlayPause);
         btnReplay10 = findViewById(R.id.btnReplay10);
         btnForward10 = findViewById(R.id.btnForward10);
@@ -158,6 +160,7 @@ public class PlayerActivity extends AppCompatActivity {
     private void initExoPlayer(String streamUrl) {
         playerView.setVisibility(View.VISIBLE);
         webViewPlayer.setVisibility(View.GONE);
+        btnFloatingBack.setVisibility(View.GONE);
 
         player = new ExoPlayer.Builder(this).build();
         playerView.setPlayer(player);
@@ -215,21 +218,26 @@ public class PlayerActivity extends AppCompatActivity {
         }
         playerView.setVisibility(View.GONE);
         rlControls.setVisibility(View.GONE);
+        btnFloatingBack.setVisibility(View.VISIBLE);
         webViewPlayer.setVisibility(View.VISIBLE);
 
         WebSettings ws = webViewPlayer.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
+        ws.setDatabaseEnabled(true);
         ws.setMediaPlaybackRequiresUserGesture(false);
         ws.setAllowFileAccess(true);
         ws.setUseWideViewPort(true);
         ws.setLoadWithOverviewMode(true);
+        ws.setJavaScriptCanOpenWindowsAutomatically(false);
+        ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        ws.setUserAgentString("Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
 
+        webViewPlayer.setWebChromeClient(new WebChromeClient());
         webViewPlayer.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                // Block external ad popups
-                if (!url.contains("interkh.com") && !url.contains("stravers.live") && !url.contains("delivembd.ws") && !url.contains("kinobox.tv")) {
+                if (url.startsWith("intent:") || url.startsWith("market:") || url.startsWith("tg:") || url.startsWith("viber:")) {
                     return true;
                 }
                 return false;
@@ -241,6 +249,7 @@ public class PlayerActivity extends AppCompatActivity {
 
     private void setupControls() {
         btnBack.setOnClickListener(v -> finish());
+        btnFloatingBack.setOnClickListener(v -> finish());
 
         btnPlayPause.setOnClickListener(v -> {
             if (player == null) return;

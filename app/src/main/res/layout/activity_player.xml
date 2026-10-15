@@ -22,6 +22,18 @@
         android:layout_height="match_parent"
         android:visibility="gone" />
 
+    <!-- Persistent Floating Back Button (always accessible) -->
+    <ImageView
+        android:id="@+id/btnFloatingBack"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="14dp"
+        android:elevation="20dp"
+        android:background="@drawable/bg_hud_pill"
+        android:padding="9dp"
+        android:src="@drawable/ic_back" />
+
     <!-- Touch Gesture Overlay (Handles Swipe Brightness/Volume & Double Tap Seek) -->
     <View
         android:id="@+id/viewGestureOverlay"

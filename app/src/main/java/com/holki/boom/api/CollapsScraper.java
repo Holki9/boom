@@ -95,13 +95,21 @@ public class CollapsScraper {
                     } catch (Exception ignored) {}
                 }
 
-                // Step 3: Fallback if no direct stream found: use Alloha embed or generic embed
-                if (source == null) {
-                    source = new StreamSource();
-                    source.setTitle(media.getTitle());
-                    // Use clean web player
-                    String encodedTitle = URLEncoder.encode(media.getTitle(), "UTF-8");
-                    source.setWebEmbedUrl("https://kinobox.tv/api/players?title=" + encodedTitle);
+                // Step 3: Best Universal Fallback: Kinohub player by KP ID, IMDb ID, or title
+                if (source == null || source.getWebEmbedUrl() == null || source.getWebEmbedUrl().isEmpty()) {
+                    if (source == null) {
+                        source = new StreamSource();
+                        source.setTitle(media.getTitle());
+                    }
+                    String identifier = null;
+                    if (media.getKinopoiskId() != null && !media.getKinopoiskId().isEmpty()) {
+                        identifier = media.getKinopoiskId();
+                    } else if (media.getImdbId() != null && !media.getImdbId().isEmpty()) {
+                        identifier = media.getImdbId();
+                    } else {
+                        identifier = String.valueOf(media.getId());
+                    }
+                    source.setWebEmbedUrl("https://on.kinohub.vip/movie/" + identifier + "/");
                 }
 
                 final StreamSource finalSource = source;
