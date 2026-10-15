@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BOOM</string>
+    <string name="app_name">BOOM Next</string>
     <string name="tab_all">Все</string>
     <string name="tab_movies">Фильмы</string>
     <string name="tab_series">Сериалы</string>

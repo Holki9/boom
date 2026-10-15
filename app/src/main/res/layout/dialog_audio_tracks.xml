@@ -2,15 +2,15 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/surface_dark"
+    android:background="@drawable/bg_bottom_nav"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="20dp">
 
     <View
-        android:layout_width="40dp"
+        android:layout_width="44dp"
         android:layout_height="4dp"
         android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="14dp"
+        android:layout_marginBottom="16dp"
         android:background="@drawable/bg_chip_unselected" />
 
     <TextView
@@ -23,18 +23,25 @@
         android:textStyle="bold" />
 
     <TextView
+        android:id="@+id/tvTracksSubheading"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:layout_marginBottom="12dp"
+        android:layout_marginBottom="14dp"
         android:text="Выберите предпочтительный перевод:"
         android:textColor="@color/text_muted"
         android:textSize="12sp" />
 
-    <LinearLayout
-        android:id="@+id/llTracksContainer"
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical" />
+        android:overScrollMode="never">
+
+        <LinearLayout
+            android:id="@+id/llTracksContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>

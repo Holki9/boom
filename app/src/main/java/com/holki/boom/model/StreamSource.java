@@ -10,6 +10,8 @@ public class StreamSource implements Serializable {
     private List<AudioTrack> audioTracks = new ArrayList<>();
     private List<SubtitleTrack> subtitles = new ArrayList<>();
     private String webEmbedUrl;
+    private String referer;
+    private String activeTranslationName = "Основная";
     private boolean isDirectStream;
     private List<EmbedOption> alternativeEmbeds = new ArrayList<>();
 
@@ -71,6 +73,12 @@ public class StreamSource implements Serializable {
 
     public String getWebEmbedUrl() { return webEmbedUrl; }
     public void setWebEmbedUrl(String webEmbedUrl) { this.webEmbedUrl = webEmbedUrl; }
+
+    public String getReferer() { return referer != null ? referer : "https://kinogo.inc/"; }
+    public void setReferer(String referer) { this.referer = referer; }
+
+    public String getActiveTranslationName() { return activeTranslationName; }
+    public void setActiveTranslationName(String activeTranslationName) { this.activeTranslationName = activeTranslationName; }
 
     public boolean isDirectStream() { return isDirectStream; }
     public void setDirectStream(boolean directStream) { isDirectStream = directStream; }

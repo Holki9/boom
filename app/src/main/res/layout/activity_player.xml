@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:background="@color/black">
 
-    <!-- ExoPlayer View -->
+    <!-- Native ExoPlayer Surface -->
     <androidx.media3.ui.PlayerView
         android:id="@+id/playerView"
         android:layout_width="match_parent"
@@ -15,14 +15,13 @@
         app:surface_type="surface_view"
         app:resize_mode="fit" />
 
-    <!-- WebView Web Player Fallback -->
+    <!-- Fallback WebView for rare unsupported balancers -->
     <WebView
         android:id="@+id/webViewPlayer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="gone" />
 
-    <!-- Fullscreen Container for WebView HTML5 Video Custom View -->
     <FrameLayout
         android:id="@+id/flFullscreenContainer"
         android:layout_width="match_parent"
@@ -30,54 +29,24 @@
         android:background="@color/black"
         android:visibility="gone" />
 
-    <!-- Persistent Floating Back Button (top-left) -->
-    <ImageView
-        android:id="@+id/btnFloatingBack"
-        android:layout_width="42dp"
-        android:layout_height="42dp"
-        android:layout_gravity="top|start"
-        android:layout_margin="14dp"
-        android:elevation="20dp"
-        android:background="@drawable/bg_hud_pill"
-        android:padding="9dp"
-        android:src="@drawable/ic_back"
-        android:visibility="gone" />
-
-    <!-- Persistent Floating Source Switcher (top-right) -->
-    <TextView
-        android:id="@+id/btnFloatingSource"
-        android:layout_width="wrap_content"
-        android:layout_height="42dp"
-        android:layout_gravity="top|end"
-        android:layout_margin="14dp"
-        android:elevation="20dp"
-        android:background="@drawable/bg_hud_pill"
-        android:gravity="center"
-        android:paddingHorizontal="14dp"
-        android:text="⚡ Источник"
-        android:textColor="@color/white"
-        android:textSize="13sp"
-        android:textStyle="bold"
-        android:visibility="gone" />
-
-    <!-- Touch Gesture Overlay (Handles Swipe Brightness/Volume & Double Tap Seek) -->
+    <!-- Fullscreen Touch Gesture Overlay -->
     <View
         android:id="@+id/viewGestureOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Custom Player Controls Overlay (ExoPlayer Mode) -->
+    <!-- Samsung One UI Player Controls Overlay -->
     <RelativeLayout
         android:id="@+id/rlPlayerControls"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#66000000">
+        android:background="#73000000">
 
-        <!-- Top Bar -->
+        <!-- Top Bar: Back, Title, PiP, Audio, Episodes, Aspect Ratio, Speed, Lock -->
         <LinearLayout
             android:id="@+id/llPlayerTopBar"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="64dp"
             android:layout_alignParentTop="true"
             android:gravity="center_vertical"
             android:paddingHorizontal="16dp"
@@ -88,57 +57,120 @@
                 android:id="@+id/btnPlayerBack"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:background="@drawable/bg_hud_pill"
-                android:padding="8dp"
+                android:background="@drawable/bg_oneui_circle"
+                android:padding="9dp"
                 android:src="@drawable/ic_back" />
 
-            <TextView
-                android:id="@+id/tvPlayerTitle"
+            <!-- Title & Subtitle Info -->
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="12dp"
+                android:layout_marginStart="14dp"
                 android:layout_marginEnd="8dp"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:text="Название фильма"
-                android:textColor="@color/white"
-                android:textSize="15sp"
-                android:textStyle="bold" />
+                android:orientation="vertical">
 
+                <TextView
+                    android:id="@+id/tvPlayerTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Название фильма"
+                    android:textColor="@color/white"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvPlayerSubtitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Full HD • Дубляж"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- PiP Button -->
+            <ImageView
+                android:id="@+id/btnPip"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_oneui_circle"
+                android:padding="8dp"
+                android:src="@drawable/ic_pip" />
+
+            <!-- Translations / Audio Button -->
             <TextView
-                android:id="@+id/btnExoSource"
+                android:id="@+id/btnAudioTrack"
                 android:layout_width="wrap_content"
                 android:layout_height="36dp"
-                android:layout_marginEnd="8dp"
-                android:background="@drawable/bg_hud_pill"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_oneui_pill"
                 android:gravity="center"
                 android:paddingHorizontal="10dp"
-                android:text="⚡ Источник"
+                android:text="💬 Озвучка"
                 android:textColor="@color/white"
                 android:textSize="12sp"
                 android:textStyle="bold" />
 
-            <ImageView
-                android:id="@+id/btnAudioTrack"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_marginEnd="8dp"
-                android:background="@drawable/bg_hud_pill"
-                android:padding="8dp"
-                android:src="@drawable/ic_audio_track" />
+            <!-- Series Episodes Selector Button (TV only) -->
+            <TextView
+                android:id="@+id/btnEpisodes"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_oneui_pill"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:text="📑 Серии"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
 
-            <ImageView
+            <!-- Aspect Ratio Button (Fit / 20:9 Zoom / Stretch) -->
+            <TextView
                 android:id="@+id/btnAspectRatio"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="@drawable/bg_hud_pill"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_oneui_pill"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:text="↔ 20:9"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- Playback Speed Button -->
+            <TextView
+                android:id="@+id/btnSpeed"
+                android:layout_width="44dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_oneui_pill"
+                android:gravity="center"
+                android:text="1.0x"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- Screen Lock Button -->
+            <ImageView
+                android:id="@+id/btnLock"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:background="@drawable/bg_oneui_circle"
                 android:padding="8dp"
-                android:src="@drawable/ic_aspect_ratio" />
+                android:src="@drawable/ic_lock_open" />
         </LinearLayout>
 
-        <!-- Center Controls: Replay 10s, Play/Pause, Forward 10s -->
+        <!-- Center Controls: Replay 10, Play/Pause, Forward 10 -->
         <LinearLayout
+            android:id="@+id/llCenterControls"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_centerInParent="true"
@@ -147,39 +179,39 @@
 
             <ImageView
                 android:id="@+id/btnReplay10"
-                android:layout_width="52dp"
-                android:layout_height="52dp"
-                android:layout_marginEnd="28dp"
-                android:background="@drawable/bg_hud_pill"
-                android:padding="12dp"
+                android:layout_width="54dp"
+                android:layout_height="54dp"
+                android:layout_marginEnd="36dp"
+                android:background="@drawable/bg_oneui_circle"
+                android:padding="13dp"
                 android:src="@drawable/ic_replay_10" />
 
             <ImageView
                 android:id="@+id/btnPlayPause"
-                android:layout_width="72dp"
-                android:layout_height="72dp"
-                android:background="@drawable/bg_btn_primary"
+                android:layout_width="74dp"
+                android:layout_height="74dp"
+                android:background="@drawable/bg_oneui_circle"
                 android:padding="18dp"
                 android:src="@drawable/ic_pause" />
 
             <ImageView
                 android:id="@+id/btnForward10"
-                android:layout_width="52dp"
-                android:layout_height="52dp"
-                android:layout_marginStart="28dp"
-                android:background="@drawable/bg_hud_pill"
-                android:padding="12dp"
+                android:layout_width="54dp"
+                android:layout_height="54dp"
+                android:layout_marginStart="36dp"
+                android:background="@drawable/bg_oneui_circle"
+                android:padding="13dp"
                 android:src="@drawable/ic_forward_10" />
         </LinearLayout>
 
-        <!-- Bottom Bar: Time, Scrubber SeekBar, Fullscreen -->
+        <!-- Bottom Bar: Current Time, SeekBar, Duration, Next Ep, Fullscreen -->
         <LinearLayout
             android:id="@+id/llPlayerBottomBar"
             android:layout_width="match_parent"
-            android:layout_height="60dp"
+            android:layout_height="64dp"
             android:layout_alignParentBottom="true"
             android:gravity="center_vertical"
-            android:paddingHorizontal="16dp"
+            android:paddingHorizontal="20dp"
             android:orientation="horizontal">
 
             <TextView
@@ -188,15 +220,15 @@
                 android:layout_height="wrap_content"
                 android:text="00:00"
                 android:textColor="@color/white"
-                android:textSize="12sp"
-                android:fontFamily="monospace" />
+                android:textSize="13sp"
+                android:fontFamily="sans-serif-medium" />
 
             <SeekBar
                 android:id="@+id/sbPlayer"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginHorizontal="10dp"
+                android:layout_marginHorizontal="12dp"
                 android:progressTint="@color/accent_red"
                 android:thumbTint="@color/accent_red" />
 
@@ -206,37 +238,81 @@
                 android:layout_height="wrap_content"
                 android:text="00:00"
                 android:textColor="@color/text_secondary"
-                android:textSize="12sp"
-                android:fontFamily="monospace" />
+                android:textSize="13sp"
+                android:fontFamily="sans-serif-medium" />
+
+            <!-- Next Episode Button (TV series only) -->
+            <TextView
+                android:id="@+id/btnNextEpisode"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:layout_marginStart="12dp"
+                android:background="@drawable/bg_oneui_pill"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:text="След. ▶"
+                android:textColor="@color/white"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
 
             <ImageView
                 android:id="@+id/btnPlayerFullscreen"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:layout_marginStart="10dp"
-                android:padding="6dp"
+                android:padding="7dp"
                 android:src="@drawable/ic_fullscreen" />
         </LinearLayout>
 
     </RelativeLayout>
 
-    <!-- Brightness HUD Pill (left side gesture) -->
+    <!-- Screen Lock Overlay (Shown when user locks player controls) -->
+    <LinearLayout
+        android:id="@+id/llLockOverlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="16dp"
+        android:background="@drawable/bg_oneui_pill"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="9dp"
+        android:visibility="gone"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:src="@drawable/ic_lock" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="Заблокировано (нажмите для разблокировки)"
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Vertical Samsung Brightness HUD (Left Gesture) -->
     <LinearLayout
         android:id="@+id/llBrightnessHud"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical|start"
         android:layout_marginStart="36dp"
-        android:background="@drawable/bg_hud_pill"
+        android:background="@drawable/bg_hud_vertical"
         android:gravity="center_vertical"
         android:paddingHorizontal="14dp"
-        android:paddingVertical="8dp"
+        android:paddingVertical="10dp"
         android:visibility="gone"
         android:orientation="horizontal">
 
         <ImageView
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
             android:src="@drawable/ic_brightness" />
 
         <TextView
@@ -250,23 +326,23 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Volume HUD Pill (right side gesture) -->
+    <!-- Vertical Samsung Volume HUD (Right Gesture) -->
     <LinearLayout
         android:id="@+id/llVolumeHud"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical|end"
         android:layout_marginEnd="36dp"
-        android:background="@drawable/bg_hud_pill"
+        android:background="@drawable/bg_hud_vertical"
         android:gravity="center_vertical"
         android:paddingHorizontal="14dp"
-        android:paddingVertical="8dp"
+        android:paddingVertical="10dp"
         android:visibility="gone"
         android:orientation="horizontal">
 
         <ImageView
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
             android:src="@drawable/ic_volume" />
 
         <TextView
@@ -280,14 +356,14 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Double-Tap Seek Feedback Pills -->
+    <!-- Double-Tap Seek Badges -->
     <TextView
         android:id="@+id/tvSeekLeftBadge"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical|start"
         android:layout_marginStart="80dp"
-        android:background="@drawable/bg_hud_pill"
+        android:background="@drawable/bg_oneui_pill"
         android:paddingHorizontal="16dp"
         android:paddingVertical="10dp"
         android:text="-10 сек"
@@ -302,7 +378,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical|end"
         android:layout_marginEnd="80dp"
-        android:background="@drawable/bg_hud_pill"
+        android:background="@drawable/bg_oneui_pill"
         android:paddingHorizontal="16dp"
         android:paddingVertical="10dp"
         android:text="+10 сек"
@@ -311,13 +387,34 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
-    <!-- Buffering Progress -->
-    <ProgressBar
-        android:id="@+id/pbPlayerBuffering"
-        android:layout_width="54dp"
-        android:layout_height="54dp"
+    <!-- Native Buffering & Stream Sniffer Loading HUD -->
+    <LinearLayout
+        android:id="@+id/llPlayerBuffering"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:indeterminateTint="@color/accent_red"
-        android:visibility="gone" />
+        android:background="@drawable/bg_oneui_pill"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="18dp"
+        android:paddingVertical="12dp"
+        android:visibility="gone"
+        android:orientation="horizontal">
+
+        <ProgressBar
+            android:id="@+id/pbPlayerBuffering"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:indeterminateTint="@color/accent_red" />
+
+        <TextView
+            android:id="@+id/tvBufferingStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:text="Загрузка потока..."
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
 </FrameLayout>

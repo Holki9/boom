@@ -7,7 +7,7 @@ android {
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.holki.boom"
+        applicationId "com.holki.boom.next"
         minSdk 26
         targetSdk 34
         versionCode 1
