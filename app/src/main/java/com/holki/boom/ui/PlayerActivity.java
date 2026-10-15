@@ -619,14 +619,15 @@ public class PlayerActivity extends AppCompatActivity {
                     for (int i = 0; i < tg.length; i++) {
                         final int trackIdx = i;
                         final TrackGroup finalTg = tg;
-                        String label = tg.getFormat(i).label;
-                        if (label == null || label.isEmpty()) {
+                        String rawLabel = tg.getFormat(i).label;
+                        if (rawLabel == null || rawLabel.isEmpty()) {
                             String lang = tg.getFormat(i).language;
-                            label = "Дорожка " + trackNum + (lang != null ? " (" + lang + ")" : "");
+                            rawLabel = "Дорожка " + trackNum + (lang != null ? " (" + lang + ")" : "");
                         }
+                        final String trackLabel = rawLabel;
 
                         TextView trackView = new TextView(this);
-                        trackView.setText("🔊  " + label);
+                        trackView.setText("🔊  " + trackLabel);
                         trackView.setTextSize(15f);
                         boolean isSelected = group.isTrackSelected(i);
                         trackView.setTextColor(getColor(isSelected ? R.color.accent_red : R.color.text_primary));
@@ -638,7 +639,7 @@ public class PlayerActivity extends AppCompatActivity {
                                     .setOverrideForType(new TrackSelectionOverride(finalTg, trackIdx))
                                     .build();
                             player.setTrackSelectionParameters(params);
-                            Toast.makeText(this, "Выбрано: " + label, Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Выбрано: " + trackLabel, Toast.LENGTH_SHORT).show();
                             dialog.dismiss();
                         });
                         container.addView(trackView);
