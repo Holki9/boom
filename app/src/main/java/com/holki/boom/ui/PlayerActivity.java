@@ -19,9 +19,17 @@ import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -344,6 +352,25 @@ public class PlayerActivity extends AppCompatActivity {
         player.play();
     }
 
+    private final OkHttpClient webClient = new OkHttpClient.Builder()
+            .followRedirects(true)
+            .connectTimeout(12, TimeUnit.SECONDS)
+            .readTimeout(12, TimeUnit.SECONDS)
+            .build();
+
+    private void sendWebPlayerCommand(String jsonCommand) {
+        if (webViewPlayer == null) return;
+        String js = "(function() {" +
+                "  var cmd = " + jsonCommand + ";" +
+                "  try { window.postMessage(cmd, '*'); } catch(e){}" +
+                "  var iframes = document.querySelectorAll('iframe');" +
+                "  for (var i = 0; i < iframes.length; i++) {" +
+                "    try { iframes[i].contentWindow.postMessage(cmd, '*'); } catch(e){}" +
+                "  }" +
+                "})();";
+        webViewPlayer.evaluateJavascript(js, null);
+    }
+
     private void initWebPlayerUnified(String embedUrl) {
         if (player != null) {
             player.release();
@@ -405,18 +432,50 @@ public class PlayerActivity extends AppCompatActivity {
         webViewPlayer.setWebChromeClient(new WebChromeClient());
         webViewPlayer.setWebViewClient(new WebViewClient() {
             @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                if (request == null || request.getUrl() == null) {
+                    return super.shouldInterceptRequest(view, request);
+                }
+                String url = request.getUrl().toString();
+
+                if (isBalancerHtml(url, request)) {
+                    WebResourceResponse resp = interceptAndCleanHtml(request, url);
+                    if (resp != null) return resp;
+                } else if (isBalancerCss(url)) {
+                    WebResourceResponse resp = interceptAndAppendCss(request, url);
+                    if (resp != null) return resp;
+                }
+
+                return super.shouldInterceptRequest(view, request);
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                injectWebPlayerHiderAndSync(view);
             }
         });
+
+        String finalEmbedUrl = embedUrl;
+        if (!finalEmbedUrl.contains("autoplay=")) {
+            finalEmbedUrl += (finalEmbedUrl.contains("?") ? "&" : "?") + "autoplay=1";
+        }
 
         String html = "<!DOCTYPE html><html><head>" +
                 "<meta charset=\"utf-8\">" +
                 "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">" +
-                "<style>* { margin:0; padding:0; box-sizing:border-box; } html, body { width:100%; height:100%; background:#000; overflow:hidden; } iframe { width:100%; height:100%; border:none; }</style>" +
+                "<style>* { margin:0; padding:0; box-sizing:border-box; } html, body { width:100%; height:100%; background:#000; overflow:hidden; } iframe { width:100%; height:100%; border:none; position:absolute; top:0; left:0; }</style>" +
+                "<script>" +
+                "window.addEventListener('message', function(ev) {" +
+                "  if (!ev || !ev.data) return;" +
+                "  if (ev.data.action === 'webTimeUpdate') {" +
+                "    if (window.BoomBridge) window.BoomBridge.onWebTimeUpdate(ev.data.current, ev.data.duration);" +
+                "  } else if (ev.data.action === 'webPlayState') {" +
+                "    if (window.BoomBridge) window.BoomBridge.onWebPlayStateChanged(ev.data.playing);" +
+                "  }" +
+                "});" +
+                "</script>" +
                 "</head><body>" +
-                "<iframe id=\"playerFrame\" src=\"" + embedUrl + "\" allowfullscreen=\"true\" allow=\"autoplay *; fullscreen *; encrypted-media *\"></iframe>" +
+                "<iframe id=\"playerFrame\" src=\"" + finalEmbedUrl + "\" allowfullscreen=\"true\" allow=\"autoplay *; fullscreen *; encrypted-media *\"></iframe>" +
                 "</body></html>";
 
         webViewPlayer.loadDataWithBaseURL("https://kinogo.inc/", html, "text/html", "UTF-8", null);
@@ -427,45 +486,171 @@ public class PlayerActivity extends AppCompatActivity {
             if (saved != null && saved.getPositionMs() > 5000) {
                 long posSec = saved.getPositionMs() / 1000;
                 handler.postDelayed(() -> {
-                    if (webViewPlayer != null) {
-                        webViewPlayer.evaluateJavascript("var v = document.querySelector('video'); if (v) v.currentTime = " + posSec + ";", null);
-                    }
-                }, 2000);
+                    sendWebPlayerCommand("{\"action\":\"seekTime\",\"time\":" + posSec + "}");
+                }, 2500);
             }
         }
 
         handler.post(updateProgressRunnable);
     }
 
-    private void injectWebPlayerHiderAndSync(WebView view) {
-        String js = "(function() {" +
-                "  var style = document.createElement('style');" +
-                "  style.innerHTML = '.rmp-control-bar, .plyr__controls, .vjs-control-bar, .jw-controls, [class*=\"controls\"], [class*=\"control-bar\"], [class*=\"watermark\"], [class*=\"logo\"], [class*=\"brand\"] { display: none !important; opacity: 0 !important; pointer-events: none !important; }';" +
-                "  document.head.appendChild(style);" +
-                "  function bindVideo(v) {" +
-                "    if (!v || v.__boomBound) return;" +
-                "    v.__boomBound = true;" +
+    private boolean isBalancerHtml(String url, WebResourceRequest request) {
+        if (url == null) return false;
+        String lower = url.toLowerCase();
+        boolean isBalancerHost = lower.contains("stravers.live") || lower.contains("alloha") ||
+                lower.contains("delivembd") || lower.contains("kinohost") ||
+                lower.contains("kinohub") || lower.contains("vidsrc") || lower.contains("/embed");
+        if (!isBalancerHost) return false;
+
+        String accept = request.getRequestHeaders() != null ? request.getRequestHeaders().get("Accept") : null;
+        boolean acceptsHtml = accept != null && accept.contains("text/html");
+        return acceptsHtml || (!lower.contains(".js") && !lower.contains(".css") && !lower.contains(".m3u8") && !lower.contains(".ts") && !lower.contains(".png") && !lower.contains(".jpg") && !lower.contains(".svg"));
+    }
+
+    private boolean isBalancerCss(String url) {
+        if (url == null) return false;
+        String lower = url.toLowerCase();
+        return (lower.contains("stravers.live") || lower.contains("alloha") || lower.contains("delivembd")) && lower.contains(".css");
+    }
+
+    private static String getCleanerCssRules() {
+        return ".selects, .select, .ui, [data-select], .select__drop, .select__item, " +
+                "[class*=\"allplay\"], [data-allplay], .allplay__video-wrapper > *:not(video), " +
+                ".rmp-control-bar, .plyr__controls, .vjs-control-bar, .jw-controls, " +
+                "[class*=\"controls\"], [class*=\"control-bar\"], [class*=\"watermark\"], " +
+                "[class*=\"logo\"], [class*=\"brand\"], .btn.trailer, .modal, .error_message, " +
+                ".rmp-ad-vast-video-player, [data-allplay*=\"ads\"] { " +
+                "display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; width: 0 !important; height: 0 !important; } " +
+                "html, body { width: 100vw !important; height: 100vh !important; overflow: hidden !important; background: #000 !important; margin: 0 !important; padding: 0 !important; } " +
+                "video, .allplay__video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; object-fit: cover !important; z-index: 999999 !important; background: #000 !important; }";
+    }
+
+    private static String getBalancerInjectionHead() {
+        return "<style id=\"boom-cleaner-style\">" + getCleanerCssRules() + "</style>" +
+                "<script id=\"boom-bridge-script\">" +
+                "(function() {" +
+                "  function findVid() { return document.querySelector('video') || document.querySelector('.allplay__video'); }" +
+                "  function bindVid(v) {" +
+                "    if (!v || v.__boomInit) return;" +
+                "    v.__boomInit = true;" +
+                "    v.style.objectFit = 'cover';" +
                 "    v.addEventListener('timeupdate', function() {" +
-                "      if (window.BoomBridge) { window.BoomBridge.onWebTimeUpdate(v.currentTime, v.duration || 0); }" +
+                "      var msg = { action: 'webTimeUpdate', current: v.currentTime, duration: v.duration || 0 };" +
+                "      try { window.parent.postMessage(msg, '*'); } catch(e){}" +
+                "      try { if (window.BoomBridge && window.BoomBridge.onWebTimeUpdate) window.BoomBridge.onWebTimeUpdate(v.currentTime, v.duration || 0); } catch(e){}" +
                 "    });" +
                 "    v.addEventListener('play', function() {" +
-                "      if (window.BoomBridge) { window.BoomBridge.onWebPlayStateChanged(true); }" +
+                "      var msg = { action: 'webPlayState', playing: true };" +
+                "      try { window.parent.postMessage(msg, '*'); } catch(e){}" +
+                "      try { if (window.BoomBridge && window.BoomBridge.onWebPlayStateChanged) window.BoomBridge.onWebPlayStateChanged(true); } catch(e){}" +
                 "    });" +
                 "    v.addEventListener('pause', function() {" +
-                "      if (window.BoomBridge) { window.BoomBridge.onWebPlayStateChanged(false); }" +
+                "      var msg = { action: 'webPlayState', playing: false };" +
+                "      try { window.parent.postMessage(msg, '*'); } catch(e){}" +
+                "      try { if (window.BoomBridge && window.BoomBridge.onWebPlayStateChanged) window.BoomBridge.onWebPlayStateChanged(false); } catch(e){}" +
                 "    });" +
+                "    if (v.paused) { v.play().catch(function(){}); }" +
                 "  }" +
+                "  window.addEventListener('message', function(ev) {" +
+                "    if (!ev || !ev.data) return;" +
+                "    var cmd = ev.data;" +
+                "    var v = findVid();" +
+                "    if (!v) return;" +
+                "    if (cmd.action === 'play') { v.play().catch(function(){}); }" +
+                "    else if (cmd.action === 'pause') { v.pause(); }" +
+                "    else if (cmd.action === 'togglePlay') { if (v.paused) v.play().catch(function(){}); else v.pause(); }" +
+                "    else if (cmd.action === 'seekPercent') { if (v.duration) v.currentTime = v.duration * cmd.percent; }" +
+                "    else if (cmd.action === 'seekDelta') { v.currentTime += cmd.delta; }" +
+                "    else if (cmd.action === 'seekTime') { v.currentTime = cmd.time; }" +
+                "    else if (cmd.action === 'speed') { v.playbackRate = cmd.rate; }" +
+                "    else if (cmd.action === 'aspect') { v.style.objectFit = cmd.mode; }" +
+                "  });" +
                 "  setInterval(function() {" +
-                "    document.querySelectorAll('video').forEach(bindVideo);" +
+                "    var v = findVid();" +
+                "    if (v) bindVid(v);" +
                 "    document.querySelectorAll('button, div, span, a').forEach(function(el) {" +
                 "      var t = (el.innerText || el.textContent || '').toLowerCase();" +
-                "      if (t.indexOf('пропустить') !== -1 || t.indexOf('skip') !== -1) {" +
-                "        try { el.click(); } catch(e){}" +
-                "      }" +
+                "      if (t.indexOf('пропустить') !== -1 || t.indexOf('skip') !== -1) { try { el.click(); } catch(e){} }" +
                 "    });" +
-                "  }, 600);" +
-                "})();";
-        view.evaluateJavascript(js, null);
+                "  }, 300);" +
+                "})();" +
+                "</script>";
+    }
+
+    private WebResourceResponse interceptAndCleanHtml(WebResourceRequest request, String url) {
+        try {
+            Request.Builder reqBuilder = new Request.Builder().url(url);
+            if (request.getRequestHeaders() != null) {
+                for (Map.Entry<String, String> entry : request.getRequestHeaders().entrySet()) {
+                    reqBuilder.header(entry.getKey(), entry.getValue());
+                }
+            }
+            if (request.getRequestHeaders() == null || !request.getRequestHeaders().containsKey("Referer")) {
+                reqBuilder.header("Referer", "https://kinogo.inc/");
+            }
+
+            Response resp = webClient.newCall(reqBuilder.build()).execute();
+            if (resp.isSuccessful() && resp.body() != null) {
+                String originalHtml = resp.body().string();
+                String injection = getBalancerInjectionHead();
+                String modifiedHtml;
+                if (originalHtml.contains("</head>")) {
+                    modifiedHtml = originalHtml.replace("</head>", injection + "</head>");
+                } else {
+                    modifiedHtml = injection + originalHtml;
+                }
+
+                Map<String, String> responseHeaders = new HashMap<>();
+                responseHeaders.put("Access-Control-Allow-Origin", "*");
+                responseHeaders.put("Access-Control-Allow-Credentials", "true");
+                responseHeaders.put("Content-Type", "text/html; charset=utf-8");
+
+                return new WebResourceResponse(
+                        "text/html",
+                        "UTF-8",
+                        200,
+                        "OK",
+                        responseHeaders,
+                        new ByteArrayInputStream(modifiedHtml.getBytes(StandardCharsets.UTF_8))
+                );
+            }
+        } catch (Exception e) {
+            android.util.Log.e("BOOM_PLAYER", "HTML interception error: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private WebResourceResponse interceptAndAppendCss(WebResourceRequest request, String url) {
+        try {
+            Request.Builder reqBuilder = new Request.Builder().url(url);
+            if (request.getRequestHeaders() != null) {
+                for (Map.Entry<String, String> entry : request.getRequestHeaders().entrySet()) {
+                    reqBuilder.header(entry.getKey(), entry.getValue());
+                }
+            }
+            Response resp = webClient.newCall(reqBuilder.build()).execute();
+            if (resp.isSuccessful() && resp.body() != null) {
+                String originalCss = resp.body().string();
+                String extraCss = "\n" + getCleanerCssRules() + "\n";
+                String modifiedCss = originalCss + extraCss;
+
+                Map<String, String> responseHeaders = new HashMap<>();
+                responseHeaders.put("Access-Control-Allow-Origin", "*");
+                responseHeaders.put("Content-Type", "text/css; charset=utf-8");
+
+                return new WebResourceResponse(
+                        "text/css",
+                        "UTF-8",
+                        200,
+                        "OK",
+                        responseHeaders,
+                        new ByteArrayInputStream(modifiedCss.getBytes(StandardCharsets.UTF_8))
+                );
+            }
+        } catch (Exception e) {
+            android.util.Log.e("BOOM_PLAYER", "CSS interception error: " + e.getMessage());
+        }
+        return null;
     }
 
     private void setupControls() {
@@ -578,30 +763,25 @@ public class PlayerActivity extends AppCompatActivity {
         playerView.setResizeMode(RESIZE_MODES[resizeModeIndex]);
         btnAspectRatio.setText(RESIZE_BTN_LABELS[resizeModeIndex]);
 
-        if (webViewPlayer != null) {
-            String fitVal = (resizeModeIndex == 0) ? "contain" : (resizeModeIndex == 1 ? "cover" : "fill");
-            webViewPlayer.evaluateJavascript("var v = document.querySelector('video'); if (v) v.style.objectFit = '" + fitVal + "';", null);
-        }
+        String fitVal = (resizeModeIndex == 0) ? "contain" : (resizeModeIndex == 1 ? "cover" : "fill");
+        sendWebPlayerCommand("{\"action\":\"aspect\",\"mode\":\"" + fitVal + "\"}");
 
         Toast.makeText(this, RESIZE_NAMES[resizeModeIndex], Toast.LENGTH_SHORT).show();
     }
 
     private void toggleWebPlay() {
         if (webViewPlayer == null) return;
-        webViewPlayer.evaluateJavascript("(function(){ var v = document.querySelector('video'); if (v) { if (v.paused) { v.play(); return true; } else { v.pause(); return false; } } return false; })()", value -> {
-            boolean playing = "true".equals(value);
-            btnPlayPause.setImageResource(playing ? R.drawable.ic_pause : R.drawable.ic_play);
-        });
+        isWebPlaying = !isWebPlaying;
+        btnPlayPause.setImageResource(isWebPlaying ? R.drawable.ic_pause : R.drawable.ic_play);
+        sendWebPlayerCommand("{\"action\":\"togglePlay\"}");
     }
 
     private void seekWebPercent(float frac) {
-        if (webViewPlayer == null) return;
-        webViewPlayer.evaluateJavascript("var v = document.querySelector('video'); if (v && v.duration) v.currentTime = v.duration * " + frac + ";", null);
+        sendWebPlayerCommand("{\"action\":\"seekPercent\",\"percent\":" + frac + "}");
     }
 
     private void seekWebDelta(float deltaSeconds) {
-        if (webViewPlayer == null) return;
-        webViewPlayer.evaluateJavascript("var v = document.querySelector('video'); if (v) v.currentTime += (" + deltaSeconds + ");", null);
+        sendWebPlayerCommand("{\"action\":\"seekDelta\",\"delta\":" + deltaSeconds + "}");
     }
 
     private void lockControls() {
@@ -857,7 +1037,7 @@ public class PlayerActivity extends AppCompatActivity {
                 if (player != null) {
                     player.setPlaybackSpeed(speed);
                 } else if (webViewPlayer != null) {
-                    webViewPlayer.evaluateJavascript("var v = document.querySelector('video'); if (v) v.playbackRate = " + speed + ";", null);
+                    sendWebPlayerCommand("{\"action\":\"speed\",\"rate\":" + speed + "}");
                 }
                 btnSpeed.setText(speed == 1.0f ? "1.0x" : (speed + "x"));
                 dialog.dismiss();
