@@ -54,7 +54,6 @@ public class PlayerActivity extends AppCompatActivity {
     private PlayerView playerView;
     private WebView webViewPlayer;
     private FrameLayout flFullscreenContainer;
-    private LinearLayout llWebFloatingBar;
     private RelativeLayout rlControls;
     private View gestureOverlay;
 
@@ -135,7 +134,6 @@ public class PlayerActivity extends AppCompatActivity {
         playerView = findViewById(R.id.playerView);
         webViewPlayer = findViewById(R.id.webViewPlayer);
         flFullscreenContainer = findViewById(R.id.flFullscreenContainer);
-        llWebFloatingBar = findViewById(R.id.llWebFloatingBar);
         rlControls = findViewById(R.id.rlPlayerControls);
         gestureOverlay = findViewById(R.id.viewGestureOverlay);
 
@@ -171,10 +169,15 @@ public class PlayerActivity extends AppCompatActivity {
         tvTitle.setText(title);
     }
 
+    private void setWebFloatingButtonsVisibility(int visibility) {
+        if (btnFloatingBack != null) btnFloatingBack.setVisibility(visibility);
+        if (btnFloatingSource != null) btnFloatingSource.setVisibility(visibility);
+    }
+
     private void initExoPlayer(String streamUrl) {
         playerView.setVisibility(View.VISIBLE);
         webViewPlayer.setVisibility(View.GONE);
-        llWebFloatingBar.setVisibility(View.GONE);
+        setWebFloatingButtonsVisibility(View.GONE);
         rlControls.setVisibility(View.VISIBLE);
         gestureOverlay.setVisibility(View.VISIBLE);
 
@@ -236,7 +239,7 @@ public class PlayerActivity extends AppCompatActivity {
         playerView.setVisibility(View.GONE);
         rlControls.setVisibility(View.GONE);
         gestureOverlay.setVisibility(View.GONE);
-        llWebFloatingBar.setVisibility(View.VISIBLE);
+        setWebFloatingButtonsVisibility(View.VISIBLE);
         webViewPlayer.setVisibility(View.VISIBLE);
 
         WebSettings ws = webViewPlayer.getSettings();
@@ -268,7 +271,7 @@ public class PlayerActivity extends AppCompatActivity {
                 flFullscreenContainer.addView(customView);
                 flFullscreenContainer.setVisibility(View.VISIBLE);
                 webViewPlayer.setVisibility(View.GONE);
-                llWebFloatingBar.setVisibility(View.GONE);
+                setWebFloatingButtonsVisibility(View.GONE);
             }
 
             @Override
@@ -277,7 +280,7 @@ public class PlayerActivity extends AppCompatActivity {
                 flFullscreenContainer.removeView(customView);
                 flFullscreenContainer.setVisibility(View.GONE);
                 webViewPlayer.setVisibility(View.VISIBLE);
-                llWebFloatingBar.setVisibility(View.VISIBLE);
+                setWebFloatingButtonsVisibility(View.VISIBLE);
                 if (customViewCallback != null) {
                     customViewCallback.onCustomViewHidden();
                 }

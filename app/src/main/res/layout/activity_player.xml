@@ -30,38 +30,35 @@
         android:background="@color/black"
         android:visibility="gone" />
 
-    <!-- Floating Top Bar for WebView Mode (Back + Source Switcher) -->
-    <LinearLayout
-        android:id="@+id/llWebFloatingBar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+    <!-- Persistent Floating Back Button (top-left) -->
+    <ImageView
+        android:id="@+id/btnFloatingBack"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
         android:layout_gravity="top|start"
         android:layout_margin="14dp"
         android:elevation="20dp"
-        android:orientation="horizontal"
-        android:visibility="gone">
+        android:background="@drawable/bg_hud_pill"
+        android:padding="9dp"
+        android:src="@drawable/ic_back"
+        android:visibility="gone" />
 
-        <ImageView
-            android:id="@+id/btnFloatingBack"
-            android:layout_width="42dp"
-            android:layout_height="42dp"
-            android:background="@drawable/bg_hud_pill"
-            android:padding="9dp"
-            android:src="@drawable/ic_back" />
-
-        <TextView
-            android:id="@+id/btnFloatingSource"
-            android:layout_width="wrap_content"
-            android:layout_height="42dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/bg_hud_pill"
-            android:gravity="center"
-            android:paddingHorizontal="14dp"
-            android:text="⚡ Источник"
-            android:textColor="@color/white"
-            android:textSize="13sp"
-            android:textStyle="bold" />
-    </LinearLayout>
+    <!-- Persistent Floating Source Switcher (top-right) -->
+    <TextView
+        android:id="@+id/btnFloatingSource"
+        android:layout_width="wrap_content"
+        android:layout_height="42dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="14dp"
+        android:elevation="20dp"
+        android:background="@drawable/bg_hud_pill"
+        android:gravity="center"
+        android:paddingHorizontal="14dp"
+        android:text="⚡ Источник"
+        android:textColor="@color/white"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 
     <!-- Touch Gesture Overlay (Handles Swipe Brightness/Volume & Double Tap Seek) -->
     <View
