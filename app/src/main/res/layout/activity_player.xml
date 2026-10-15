@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/flPlayerRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black">
+
+    <!-- ExoPlayer View -->
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/playerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:use_controller="false"
+        app:surface_type="surface_view"
+        app:resize_mode="fit" />
+
+    <!-- WebView Web Player Fallback -->
+    <WebView
+        android:id="@+id/webViewPlayer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <!-- Touch Gesture Overlay (Handles Swipe Brightness/Volume & Double Tap Seek) -->
+    <View
+        android:id="@+id/viewGestureOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Custom Player Controls Overlay -->
+    <RelativeLayout
+        android:id="@+id/rlPlayerControls"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#66000000">
+
+        <!-- Top Bar -->
+        <LinearLayout
+            android:id="@+id/llPlayerTopBar"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_alignParentTop="true"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:background="@drawable/bg_gradient_hero"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/btnPlayerBack"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_hud_pill"
+                android:padding="8dp"
+                android:src="@drawable/ic_back" />
+
+            <TextView
+                android:id="@+id/tvPlayerTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="8dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Название фильма"
+                android:textColor="@color/white"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/btnAudioTrack"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/bg_hud_pill"
+                android:padding="8dp"
+                android:src="@drawable/ic_audio_track" />
+
+            <ImageView
+                android:id="@+id/btnAspectRatio"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_hud_pill"
+                android:padding="8dp"
+                android:src="@drawable/ic_aspect_ratio" />
+        </LinearLayout>
+
+        <!-- Center Controls: Replay 10s, Play/Pause, Forward 10s -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/btnReplay10"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:layout_marginEnd="28dp"
+                android:background="@drawable/bg_hud_pill"
+                android:padding="12dp"
+                android:src="@drawable/ic_replay_10" />
+
+            <ImageView
+                android:id="@+id/btnPlayPause"
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:background="@drawable/bg_btn_primary"
+                android:padding="18dp"
+                android:src="@drawable/ic_pause" />
+
+            <ImageView
+                android:id="@+id/btnForward10"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:layout_marginStart="28dp"
+                android:background="@drawable/bg_hud_pill"
+                android:padding="12dp"
+                android:src="@drawable/ic_forward_10" />
+        </LinearLayout>
+
+        <!-- Bottom Bar: Time, Scrubber SeekBar, Fullscreen -->
+        <LinearLayout
+            android:id="@+id/llPlayerBottomBar"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_alignParentBottom="true"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvCurrentTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:fontFamily="monospace" />
+
+            <SeekBar
+                android:id="@+id/sbPlayer"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="10dp"
+                android:progressTint="@color/accent_red"
+                android:thumbTint="@color/accent_red" />
+
+            <TextView
+                android:id="@+id/tvTotalTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:fontFamily="monospace" />
+
+            <ImageView
+                android:id="@+id/btnPlayerFullscreen"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="10dp"
+                android:padding="6dp"
+                android:src="@drawable/ic_fullscreen" />
+        </LinearLayout>
+
+    </RelativeLayout>
+
+    <!-- Brightness HUD Pill (left side gesture) -->
+    <LinearLayout
+        android:id="@+id/llBrightnessHud"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|start"
+        android:layout_marginStart="36dp"
+        android:background="@drawable/bg_hud_pill"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="8dp"
+        android:visibility="gone"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_brightness" />
+
+        <TextView
+            android:id="@+id/tvBrightnessValue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="80%"
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Volume HUD Pill (right side gesture) -->
+    <LinearLayout
+        android:id="@+id/llVolumeHud"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|end"
+        android:layout_marginEnd="36dp"
+        android:background="@drawable/bg_hud_pill"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="8dp"
+        android:visibility="gone"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_volume" />
+
+        <TextView
+            android:id="@+id/tvVolumeValue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="60%"
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Double-Tap Seek Feedback Pills -->
+    <TextView
+        android:id="@+id/tvSeekLeftBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|start"
+        android:layout_marginStart="80dp"
+        android:background="@drawable/bg_hud_pill"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="10dp"
+        android:text="-10 сек"
+        android:textColor="@color/white"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvSeekRightBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|end"
+        android:layout_marginEnd="80dp"
+        android:background="@drawable/bg_hud_pill"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="10dp"
+        android:text="+10 сек"
+        android:textColor="@color/white"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <!-- Buffering Progress -->
+    <ProgressBar
+        android:id="@+id/pbPlayerBuffering"
+        android:layout_width="54dp"
+        android:layout_height="54dp"
+        android:layout_gravity="center"
+        android:indeterminateTint="@color/accent_red"
+        android:visibility="gone" />
+
+</FrameLayout>

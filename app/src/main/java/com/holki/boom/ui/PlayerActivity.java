@@ -1,0 +1,550 @@
+package com.holki.boom.ui;
+
+import android.content.Context;
+import android.media.AudioManager;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.GestureDetector;
+import android.view.HapticFeedbackConstants;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.RelativeLayout;
+import android.widget.SeekBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.OptIn;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
+import androidx.media3.common.TrackGroup;
+import androidx.media3.common.TrackSelectionOverride;
+import androidx.media3.common.TrackSelectionParameters;
+import androidx.media3.common.Tracks;
+import androidx.media3.common.util.UnstableApi;
+import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.ui.AspectRatioFrameLayout;
+import androidx.media3.ui.PlayerView;
+
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.holki.boom.R;
+import com.holki.boom.data.WatchHistoryStore;
+import com.holki.boom.model.StreamSource;
+import com.holki.boom.model.WatchHistoryItem;
+
+import java.util.Locale;
+
+@OptIn(markerClass = UnstableApi.class)
+public class PlayerActivity extends AppCompatActivity {
+    private ExoPlayer player;
+    private PlayerView playerView;
+    private WebView webViewPlayer;
+    private RelativeLayout rlControls;
+    private View gestureOverlay;
+
+    private TextView tvTitle, tvCurrentTime, tvTotalTime;
+    private ImageView btnBack, btnPlayPause, btnReplay10, btnForward10, btnAudioTrack, btnAspectRatio, btnFullscreen;
+    private SeekBar seekBar;
+    private ProgressBar pbBuffering;
+
+    // Gesture HUDs
+    private LinearLayout llBrightnessHud, llVolumeHud;
+    private TextView tvBrightnessValue, tvVolumeValue;
+    private TextView tvSeekLeftBadge, tvSeekRightBadge;
+
+    private StreamSource streamSource;
+    private com.holki.boom.model.MediaItem mediaItem;
+    private int season = 1;
+    private int episode = 1;
+
+    private WatchHistoryStore historyStore;
+    private AudioManager audioManager;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+
+    private boolean isControlsVisible = true;
+    private final Runnable hideControlsRunnable = this::hideControls;
+    private final Runnable updateProgressRunnable = new Runnable() {
+        @Override
+        public void run() {
+            updateProgress();
+            handler.postDelayed(this, 1000);
+        }
+    };
+
+    private int resizeModeIndex = 0; // 0=fit, 1=zoom (20:9 fill), 2=fill
+    private static final int[] RESIZE_MODES = {
+            AspectRatioFrameLayout.RESIZE_MODE_FIT,
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
+            AspectRatioFrameLayout.RESIZE_MODE_FILL
+    };
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        // Immersive fullscreen
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        setContentView(R.layout.activity_player);
+
+        streamSource = (StreamSource) getIntent().getSerializableExtra("stream_source");
+        mediaItem = (com.holki.boom.model.MediaItem) getIntent().getSerializableExtra("media_item");
+        season = getIntent().getIntExtra("season", 1);
+        episode = getIntent().getIntExtra("episode", 1);
+
+        historyStore = new WatchHistoryStore(this);
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+
+        initViews();
+        setupControls();
+        setupGestures();
+
+        if (streamSource != null && streamSource.getHlsMasterUrl() != null && !streamSource.getHlsMasterUrl().isEmpty()) {
+            initExoPlayer(streamSource.getHlsMasterUrl());
+        } else if (streamSource != null && streamSource.getWebEmbedUrl() != null && !streamSource.getWebEmbedUrl().isEmpty()) {
+            initWebView(streamSource.getWebEmbedUrl());
+        } else {
+            Toast.makeText(this, "Поток недоступен", Toast.LENGTH_SHORT).show();
+            finish();
+        }
+    }
+
+    private void initViews() {
+        playerView = findViewById(R.id.playerView);
+        webViewPlayer = findViewById(R.id.webViewPlayer);
+        rlControls = findViewById(R.id.rlPlayerControls);
+        gestureOverlay = findViewById(R.id.viewGestureOverlay);
+
+        tvTitle = findViewById(R.id.tvPlayerTitle);
+        tvCurrentTime = findViewById(R.id.tvCurrentTime);
+        tvTotalTime = findViewById(R.id.tvTotalTime);
+        seekBar = findViewById(R.id.sbPlayer);
+        pbBuffering = findViewById(R.id.pbPlayerBuffering);
+
+        btnBack = findViewById(R.id.btnPlayerBack);
+        btnPlayPause = findViewById(R.id.btnPlayPause);
+        btnReplay10 = findViewById(R.id.btnReplay10);
+        btnForward10 = findViewById(R.id.btnForward10);
+        btnAudioTrack = findViewById(R.id.btnAudioTrack);
+        btnAspectRatio = findViewById(R.id.btnAspectRatio);
+        btnFullscreen = findViewById(R.id.btnPlayerFullscreen);
+
+        llBrightnessHud = findViewById(R.id.llBrightnessHud);
+        llVolumeHud = findViewById(R.id.llVolumeHud);
+        tvBrightnessValue = findViewById(R.id.tvBrightnessValue);
+        tvVolumeValue = findViewById(R.id.tvVolumeValue);
+        tvSeekLeftBadge = findViewById(R.id.tvSeekLeftBadge);
+        tvSeekRightBadge = findViewById(R.id.tvSeekRightBadge);
+
+        String title = mediaItem != null ? mediaItem.getTitle() : "Воспроизведение";
+        if (mediaItem != null && mediaItem.isTv()) {
+            title += " (Сезон " + season + ", Серия " + episode + ")";
+        }
+        tvTitle.setText(title);
+    }
+
+    private void initExoPlayer(String streamUrl) {
+        playerView.setVisibility(View.VISIBLE);
+        webViewPlayer.setVisibility(View.GONE);
+
+        player = new ExoPlayer.Builder(this).build();
+        playerView.setPlayer(player);
+
+        MediaItem item = MediaItem.fromUri(streamUrl);
+        player.setMediaItem(item);
+        player.prepare();
+
+        // Restore saved position
+        if (mediaItem != null) {
+            WatchHistoryItem saved = historyStore.getProgress(mediaItem.getId());
+            if (saved != null && saved.getPositionMs() > 5000) {
+                player.seekTo(saved.getPositionMs());
+            }
+        }
+
+        player.play();
+
+        player.addListener(new Player.Listener() {
+            @Override
+            public void onPlaybackStateChanged(int playbackState) {
+                if (playbackState == Player.STATE_BUFFERING) {
+                    pbBuffering.setVisibility(View.VISIBLE);
+                } else {
+                    pbBuffering.setVisibility(View.GONE);
+                }
+            }
+
+            @Override
+            public void onIsPlayingChanged(boolean isPlaying) {
+                btnPlayPause.setImageResource(isPlaying ? R.drawable.ic_pause : R.drawable.ic_play);
+                if (isPlaying) {
+                    scheduleHideControls();
+                }
+            }
+
+            @Override
+            public void onPlayerError(PlaybackException error) {
+                // Fallback to web embed if HLS stream error occurs
+                if (streamSource != null && streamSource.getWebEmbedUrl() != null) {
+                    initWebView(streamSource.getWebEmbedUrl());
+                } else {
+                    Toast.makeText(PlayerActivity.this, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        handler.post(updateProgressRunnable);
+    }
+
+    private void initWebView(String embedUrl) {
+        if (player != null) {
+            player.release();
+            player = null;
+        }
+        playerView.setVisibility(View.GONE);
+        rlControls.setVisibility(View.GONE);
+        webViewPlayer.setVisibility(View.VISIBLE);
+
+        WebSettings ws = webViewPlayer.getSettings();
+        ws.setJavaScriptEnabled(true);
+        ws.setDomStorageEnabled(true);
+        ws.setMediaPlaybackRequiresUserGesture(false);
+        ws.setAllowFileAccess(true);
+        ws.setUseWideViewPort(true);
+        ws.setLoadWithOverviewMode(true);
+
+        webViewPlayer.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                // Block external ad popups
+                if (!url.contains("interkh.com") && !url.contains("stravers.live") && !url.contains("delivembd.ws") && !url.contains("kinobox.tv")) {
+                    return true;
+                }
+                return false;
+            }
+        });
+
+        webViewPlayer.loadUrl(embedUrl);
+    }
+
+    private void setupControls() {
+        btnBack.setOnClickListener(v -> finish());
+
+        btnPlayPause.setOnClickListener(v -> {
+            if (player == null) return;
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            if (player.isPlaying()) {
+                player.pause();
+            } else {
+                player.play();
+            }
+            scheduleHideControls();
+        });
+
+        btnReplay10.setOnClickListener(v -> {
+            if (player == null) return;
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            seekBy(-10000);
+            showSeekBadge(false);
+            scheduleHideControls();
+        });
+
+        btnForward10.setOnClickListener(v -> {
+            if (player == null) return;
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            seekBy(10000);
+            showSeekBadge(true);
+            scheduleHideControls();
+        });
+
+        btnAspectRatio.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            resizeModeIndex = (resizeModeIndex + 1) % RESIZE_MODES.length;
+            playerView.setResizeMode(RESIZE_MODES[resizeModeIndex]);
+            String[] names = {"Оригинал (Fit)", "Заполнение 20:9 (Zoom)", "Растянуть (Fill)"};
+            Toast.makeText(this, names[resizeModeIndex], Toast.LENGTH_SHORT).show();
+            scheduleHideControls();
+        });
+
+        btnAudioTrack.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            showAudioTracksDialog();
+        });
+
+        btnFullscreen.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            resizeModeIndex = (resizeModeIndex + 1) % RESIZE_MODES.length;
+            playerView.setResizeMode(RESIZE_MODES[resizeModeIndex]);
+        });
+
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser && player != null) {
+                    long duration = player.getDuration();
+                    if (duration > 0) {
+                        long newPos = (duration * progress) / 1000;
+                        player.seekTo(newPos);
+                    }
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                handler.removeCallbacks(hideControlsRunnable);
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                scheduleHideControls();
+            }
+        });
+    }
+
+    private void setupGestures() {
+        GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onSingleTapConfirmed(MotionEvent e) {
+                toggleControls();
+                return true;
+            }
+
+            @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                int screenWidth = getResources().getDisplayMetrics().widthPixels;
+                if (e.getX() < screenWidth / 2f) {
+                    seekBy(-10000);
+                    showSeekBadge(false);
+                } else {
+                    seekBy(10000);
+                    showSeekBadge(true);
+                }
+                gestureOverlay.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                return true;
+            }
+
+            @Override
+            public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+                if (e1 == null || e2 == null) return false;
+                int screenWidth = getResources().getDisplayMetrics().widthPixels;
+                float deltaY = distanceY; // scrolling up = positive
+
+                if (e1.getX() < screenWidth * 0.45f) {
+                    // Left half: Brightness
+                    adjustBrightness(deltaY);
+                } else if (e1.getX() > screenWidth * 0.55f) {
+                    // Right half: Volume
+                    adjustVolume(deltaY);
+                }
+                return true;
+            }
+        });
+
+        gestureOverlay.setOnTouchListener((v, event) -> {
+            detector.onTouchEvent(event);
+            if (event.getAction() == MotionEvent.ACTION_UP) {
+                llBrightnessHud.setVisibility(View.GONE);
+                llVolumeHud.setVisibility(View.GONE);
+            }
+            return true;
+        });
+    }
+
+    private void adjustBrightness(float deltaY) {
+        WindowManager.LayoutParams lp = getWindow().getAttributes();
+        float current = lp.screenBrightness;
+        if (current < 0) current = 0.5f;
+        current += (deltaY / 1500f);
+        current = Math.max(0.01f, Math.min(1.0f, current));
+        lp.screenBrightness = current;
+        getWindow().setAttributes(lp);
+
+        int percent = (int) (current * 100);
+        tvBrightnessValue.setText(percent + "%");
+        llBrightnessHud.setVisibility(View.VISIBLE);
+    }
+
+    private void adjustVolume(float deltaY) {
+        int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        int current = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+        int change = (deltaY > 0) ? 1 : -1;
+        int next = Math.max(0, Math.min(max, current + change));
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, next, 0);
+
+        int percent = (int) ((next * 100f) / max);
+        tvVolumeValue.setText(percent + "%");
+        llVolumeHud.setVisibility(View.VISIBLE);
+    }
+
+    private void showSeekBadge(boolean isForward) {
+        TextView badge = isForward ? tvSeekRightBadge : tvSeekLeftBadge;
+        badge.setVisibility(View.VISIBLE);
+        handler.postDelayed(() -> badge.setVisibility(View.GONE), 800);
+    }
+
+    private void seekBy(long deltaMs) {
+        if (player == null) return;
+        long pos = Math.max(0, Math.min(player.getDuration(), player.getCurrentPosition() + deltaMs));
+        player.seekTo(pos);
+    }
+
+    private void toggleControls() {
+        if (isControlsVisible) {
+            hideControls();
+        } else {
+            showControls();
+        }
+    }
+
+    private void showControls() {
+        rlControls.setVisibility(View.VISIBLE);
+        isControlsVisible = true;
+        scheduleHideControls();
+    }
+
+    private void hideControls() {
+        rlControls.setVisibility(View.GONE);
+        isControlsVisible = false;
+    }
+
+    private void scheduleHideControls() {
+        handler.removeCallbacks(hideControlsRunnable);
+        handler.postDelayed(hideControlsRunnable, 4000);
+    }
+
+    private void updateProgress() {
+        if (player == null) return;
+        long pos = player.getCurrentPosition();
+        long dur = player.getDuration();
+
+        if (dur > 0) {
+            int progress = (int) ((pos * 1000) / dur);
+            seekBar.setProgress(progress);
+            tvCurrentTime.setText(formatTime(pos));
+            tvTotalTime.setText(formatTime(dur));
+
+            // Save watch progress
+            saveProgressToStore(pos, dur);
+        }
+    }
+
+    private void saveProgressToStore(long pos, long dur) {
+        if (mediaItem == null) return;
+        WatchHistoryItem item = new WatchHistoryItem();
+        item.setMediaId(mediaItem.getId());
+        item.setTitle(mediaItem.getTitle());
+        item.setPosterUrl(mediaItem.getFullPosterUrl());
+        item.setMediaType(mediaItem.getMediaType());
+        item.setPositionMs(pos);
+        item.setDurationMs(dur);
+        item.setSeason(season);
+        item.setEpisode(episode);
+        historyStore.saveProgress(item);
+    }
+
+    private String formatTime(long ms) {
+        long totalSec = ms / 1000;
+        long sec = totalSec % 60;
+        long min = (totalSec / 60) % 60;
+        long hour = totalSec / 3600;
+
+        if (hour > 0) {
+            return String.format(Locale.US, "%02d:%02d:%02d", hour, min, sec);
+        } else {
+            return String.format(Locale.US, "%02d:%02d", min, sec);
+        }
+    }
+
+    private void showAudioTracksDialog() {
+        if (player == null) return;
+        BottomSheetDialog dialog = new BottomSheetDialog(this, com.google.android.material.R.style.Theme_Design_BottomSheetDialog);
+        View view = getLayoutInflater().inflate(R.layout.dialog_audio_tracks, null);
+        dialog.setContentView(view);
+
+        LinearLayout container = view.findViewById(R.id.llTracksContainer);
+
+        Tracks tracks = player.getCurrentTracks();
+        int trackNum = 1;
+
+        for (Tracks.Group group : tracks.getGroups()) {
+            if (group.getType() == androidx.media3.common.C.TRACK_TYPE_AUDIO) {
+                TrackGroup tg = group.getMediaTrackGroup();
+                for (int i = 0; i < tg.length; i++) {
+                    final int trackIdx = i;
+                    final TrackGroup finalTg = tg;
+                    String label = tg.getFormat(i).label;
+                    if (label == null || label.isEmpty()) {
+                        String lang = tg.getFormat(i).language;
+                        label = "Дорожка " + trackNum + (lang != null ? " (" + lang + ")" : "");
+                    }
+
+                    // Map with Scraper audio names if available
+                    if (streamSource != null && streamSource.getAudioTracks().size() > (trackNum - 1)) {
+                        label = streamSource.getAudioTracks().get(trackNum - 1).getName();
+                    }
+
+                    TextView trackView = new TextView(this);
+                    trackView.setText(label);
+                    trackView.setTextSize(15f);
+                    trackView.setTextColor(getColor(group.isTrackSelected(i) ? R.color.accent_red : R.color.text_primary));
+                    trackView.setPadding(0, 24, 0, 24);
+                    trackView.setOnClickListener(tv -> {
+                        TrackSelectionParameters params = player.getTrackSelectionParameters()
+                                .buildUpon()
+                                .setOverrideForType(new TrackSelectionOverride(finalTg, trackIdx))
+                                .build();
+                        player.setTrackSelectionParameters(params);
+                        Toast.makeText(this, "Выбрано: " + trackView.getText(), Toast.LENGTH_SHORT).show();
+                        dialog.dismiss();
+                    });
+                    container.addView(trackView);
+                    trackNum++;
+                }
+            }
+        }
+
+        if (trackNum == 1) {
+            TextView noneView = new TextView(this);
+            noneView.setText("Доступна только основная дорожка");
+            noneView.setTextColor(getColor(R.color.text_muted));
+            container.addView(noneView);
+        }
+
+        dialog.show();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (player != null) {
+            player.pause();
+            updateProgress();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        handler.removeCallbacks(updateProgressRunnable);
+        handler.removeCallbacks(hideControlsRunnable);
+        if (player != null) {
+            player.release();
+            player = null;
+        }
+        if (webViewPlayer != null) {
+            webViewPlayer.destroy();
+        }
+    }
+}

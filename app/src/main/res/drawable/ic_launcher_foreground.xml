@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer Glow Ring -->
+    <path
+        android:strokeColor="#FF2A4D"
+        android:strokeWidth="3.5"
+        android:pathData="M54,22 A32,32 0 1,1 53.9,22 Z" />
+
+    <!-- Play Triangle / Boom Flare in Center -->
+    <path
+        android:fillColor="#FF2A4D"
+        android:pathData="M46,38 L72,54 L46,70 Z" />
+
+    <!-- Accent Flare Highlight -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,43 L63,54 L48,65 Z" />
+</vector>

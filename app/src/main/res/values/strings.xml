@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BOOM</string>
+    <string name="tab_all">Все</string>
+    <string name="tab_movies">Фильмы</string>
+    <string name="tab_series">Сериалы</string>
+    <string name="tab_cartoons">Мультфильмы</string>
+    <string name="tab_anime">Аниме</string>
+
+    <string name="section_continue">Продолжить просмотр</string>
+    <string name="section_trending">🔥 Сейчас в тренде</string>
+    <string name="section_popular_movies">🎬 Популярные фильмы</string>
+    <string name="section_popular_series">📺 Топовые сериалы</string>
+    <string name="section_cartoons">🎨 Мультфильмы</string>
+    <string name="section_anime">⚡ Аниме</string>
+
+    <string name="search_hint">Фильмы, сериалы, аниме...</string>
+    <string name="play_online">Смотреть онлайн</string>
+    <string name="torrents_4k">Торренты &amp; 4K</string>
+    <string name="seasons_title">Сезоны и серии</string>
+    <string name="voiceover_title">Озвучка / Перевод</string>
+</resources>
