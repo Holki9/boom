@@ -519,7 +519,8 @@ public class PlayerActivity extends AppCompatActivity {
                 ".rmp-control-bar, .plyr__controls, .vjs-control-bar, .jw-controls, " +
                 "[class*=\"controls\"], [class*=\"control-bar\"], [class*=\"watermark\"], " +
                 "[class*=\"logo\"], [class*=\"brand\"], .btn.trailer, .modal, .error_message, " +
-                ".rmp-ad-vast-video-player, [data-allplay*=\"ads\"] { " +
+                ".rmp-ad-vast-video-player, [data-allplay*=\"ads\"], .time_save, .time_save__btn, " +
+                ".time_save__close, [class*=\"time_save\"], [class*=\"modal\"] { " +
                 "display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; width: 0 !important; height: 0 !important; } " +
                 "html, body { width: 100vw !important; height: 100vh !important; overflow: hidden !important; background: #000 !important; margin: 0 !important; padding: 0 !important; } " +
                 "video, .allplay__video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; object-fit: cover !important; z-index: 999999 !important; background: #000 !important; }";
@@ -568,11 +569,13 @@ public class PlayerActivity extends AppCompatActivity {
                 "  setInterval(function() {" +
                 "    var v = findVid();" +
                 "    if (v) bindVid(v);" +
+                "    var tsBtn = document.querySelector('.time_save__btn, .time_save button, [class*=\"time_save\"] button, .modal button');" +
+                "    if (tsBtn) { try { tsBtn.click(); } catch(e){} }" +
                 "    document.querySelectorAll('button, div, span, a').forEach(function(el) {" +
                 "      var t = (el.innerText || el.textContent || '').toLowerCase();" +
-                "      if (t.indexOf('пропустить') !== -1 || t.indexOf('skip') !== -1) { try { el.click(); } catch(e){} }" +
+                "      if (t.indexOf('продолжить') !== -1 || t.indexOf('пропустить') !== -1 || t.indexOf('skip') !== -1) { try { el.click(); } catch(e){} }" +
                 "    });" +
-                "  }, 300);" +
+                "  }, 250);" +
                 "})();" +
                 "</script>";
     }
@@ -592,6 +595,8 @@ public class PlayerActivity extends AppCompatActivity {
             Response resp = webClient.newCall(reqBuilder.build()).execute();
             if (resp.isSuccessful() && resp.body() != null) {
                 String originalHtml = resp.body().string();
+                originalHtml = originalHtml.replace("saveTime: 1", "saveTime: 0")
+                        .replace("autoplay: 0", "autoplay: 1");
                 String injection = getBalancerInjectionHead();
                 String modifiedHtml;
                 if (originalHtml.contains("</head>")) {
